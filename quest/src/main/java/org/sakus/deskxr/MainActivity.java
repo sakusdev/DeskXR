@@ -40,6 +40,7 @@ public final class MainActivity extends Activity {
     private EditText cameraYField;
     private CheckBox facingUserField;
     private Button startButton;
+    private Button quickCalibrateButton;
     private TextView statusView;
 
     private final Runnable statusPoll = new Runnable() {
@@ -49,6 +50,7 @@ public final class MainActivity extends Activity {
             statusView.setText(nativeGetStatus());
             startButton.setText(running ? "Stop bridge" : "Start bridge");
             setConfigurationEnabled(!running);
+            quickCalibrateButton.setEnabled(running);
             handler.postDelayed(this, 350);
         }
     };
@@ -121,13 +123,21 @@ public final class MainActivity extends Activity {
         root.addView(facingUserField, fixedWidth(700));
 
         TextView calibrationNote = label(
-                "Facing-me mode applies a 180 degree yaw and places the Quest in front of the virtual head. "
-                        + "Adjust distance/height until the hands line up.",
+                "Manual values provide the starting transform. For a quick runtime calibration, "
+                        + "start the bridge, hold both controllers shoulder-width apart in front of your upper chest, "
+                        + "then press Quick calibrate.",
                 13f,
                 Color.GRAY);
         LinearLayout.LayoutParams calibrationParams = fixedWidth(700);
         calibrationParams.setMargins(0, 4, 0, 12);
         root.addView(calibrationNote, calibrationParams);
+
+        quickCalibrateButton = new Button(this);
+        quickCalibrateButton.setText("Quick calibrate from both controllers");
+        quickCalibrateButton.setEnabled(false);
+        LinearLayout.LayoutParams calibrateButtonParams = fixedWidth(700);
+        calibrateButtonParams.setMargins(0, 4, 0, 8);
+        root.addView(quickCalibrateButton, calibrateButtonParams);
 
         startButton = new Button(this);
         startButton.setText("Start bridge");
@@ -150,6 +160,12 @@ public final class MainActivity extends Activity {
         root.addView(note, noteParams);
 
         setContentView(scroll);
+
+        quickCalibrateButton.setOnClickListener(v -> {
+            if (!nativeRequestQuickCalibration()) {
+                statusView.setText("Quick calibration requires an active OpenXR session.");
+            }
+        });
 
         startButton.setOnClickListener(v -> {
             if (nativeIsRunning()) {
@@ -295,6 +311,7 @@ public final class MainActivity extends Activity {
             boolean facingUser);
 
     private static native void nativeStop();
+    private static native boolean nativeRequestQuickCalibration();
     private static native boolean nativeIsRunning();
     private static native String nativeGetStatus();
 }
