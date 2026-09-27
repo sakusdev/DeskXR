@@ -4,7 +4,9 @@
     "udp_port": 39742,
     "hmd_x": 0.0,
     "hmd_y": 1.65,
-    "hmd_z": 0.0
+    "hmd_z": 0.0,
+    "mouse_sensitivity_deg_per_pixel": 0.08,
+    "mouse_pitch_limit_deg": 80.0
   },
   "deskxr_display": {
     "window_x": 0,
