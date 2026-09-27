@@ -93,6 +93,8 @@ DeskXR computes:
 
 This provides a full yaw + XYZ translation transform without requiring the user to measure the Quest mount. The chest anchor is still an anthropometric approximation, so real-hardware validation and optional fine adjustment remain useful.
 
+The guided solve can be requested from the Android UI or entirely from the controllers. Holding both triggers above roughly 80% while clicking both thumbsticks for about 1.2 seconds performs the solve immediately; a short haptic pulse on both controllers confirms success. This avoids depending on the Android UI remaining visible after the OpenXR session takes over the headset display.
+
 ## OpenXR lifecycle experiment
 
 The major hardware unknown is what Horizon OS does when the Quest is physically not worn.
