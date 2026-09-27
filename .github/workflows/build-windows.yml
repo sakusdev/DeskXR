@@ -48,6 +48,18 @@ jobs:
           if (-not (Test-Path $manifest)) { throw "Missing $manifest" }
           if (-not (Test-Path $installer)) { throw "Missing $installer" }
 
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $installer),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "PowerShell installer syntax check failed"
+          }
+
       - name: Upload driver
         uses: actions/upload-artifact@v4
         with:
