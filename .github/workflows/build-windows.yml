@@ -12,14 +12,6 @@ on:
       - "driver/**"
       - "scripts/install-driver.ps1"
       - ".github/workflows/build-windows.yml"
-  pull_request:
-    paths:
-      - "CMakeLists.txt"
-      - "src/**"
-      - "common/**"
-      - "driver/**"
-      - "scripts/install-driver.ps1"
-      - ".github/workflows/build-windows.yml"
   workflow_dispatch:
 
 concurrency:
