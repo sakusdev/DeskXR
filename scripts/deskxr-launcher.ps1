@@ -266,7 +266,7 @@ $saveSettings = New-DeskButton "Save desktop settings" 28 372
 $useDisplay = New-DeskButton "Use primary monitor size" 328 372
 $install = New-DeskButton "Install / update SteamVR driver" 28 430
 $firewall = New-DeskButton "Install + allow UDP 39742" 328 430
-$unworn = New-DeskButton "Keep Quest active while unworn" 28 486
+$questStart = New-DeskButton "Start Quest bridge (ADB)" 28 486
 $restore = New-DeskButton "Restore Quest proximity sensor" 328 486
 $steamvr = New-DeskButton "Start SteamVR" 28 542
 $openRepo = New-DeskButton "Open DeskXR GitHub" 328 542
@@ -364,11 +364,20 @@ $firewall.Add_Click({
     }
 })
 
-$unworn.Add_Click({
+$questStart.Add_Click({
     try {
-        $script = Get-HelperPath "quest-unworn-mode.ps1" "quest-unworn-mode.ps1"
-        Invoke-Helper $script
-        $status.Text = "Quest proximity override requested."
+        $selected = [string]$ipBox.SelectedItem
+        $hostAddress = ($selected -split "\s+")[0]
+
+        try {
+            [void][System.Net.IPAddress]::Parse($hostAddress)
+        } catch {
+            throw "Select a valid LAN IPv4 address first."
+        }
+
+        $script = Get-HelperPath "quest-start.ps1" "quest-start.ps1"
+        Invoke-Helper $script @("-HostAddress", $hostAddress, "-Port", "39742")
+        $status.Text = "Quest DeskXR bridge launch requested via ADB."
     } catch {
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "DeskXR") | Out-Null
     }
