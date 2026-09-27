@@ -41,6 +41,14 @@ enum Button : std::uint32_t {
     ButtonY = 1u << 3,
     ButtonThumbstick = 1u << 4,
     ButtonMenu = 1u << 5,
+
+    TouchA = 1u << 16,
+    TouchB = 1u << 17,
+    TouchX = 1u << 18,
+    TouchY = 1u << 19,
+    TouchTrigger = 1u << 20,
+    TouchThumbstick = 1u << 21,
+    TouchThumbrest = 1u << 22,
 };
 
 #pragma pack(push, 1)
@@ -452,6 +460,11 @@ private:
             !CreateAction("thumbstick", "Thumbstick", XR_ACTION_TYPE_VECTOR2F_INPUT, &thumbstickAction_, true) ||
             !CreateAction("primary", "Primary button", XR_ACTION_TYPE_BOOLEAN_INPUT, &primaryAction_, true) ||
             !CreateAction("secondary", "Secondary button", XR_ACTION_TYPE_BOOLEAN_INPUT, &secondaryAction_, true) ||
+            !CreateAction("primary_touch", "Primary touch", XR_ACTION_TYPE_BOOLEAN_INPUT, &primaryTouchAction_, true) ||
+            !CreateAction("secondary_touch", "Secondary touch", XR_ACTION_TYPE_BOOLEAN_INPUT, &secondaryTouchAction_, true) ||
+            !CreateAction("trigger_touch", "Trigger touch", XR_ACTION_TYPE_BOOLEAN_INPUT, &triggerTouchAction_, true) ||
+            !CreateAction("thumb_touch", "Thumbstick touch", XR_ACTION_TYPE_BOOLEAN_INPUT, &thumbstickTouchAction_, true) ||
+            !CreateAction("thumbrest_touch", "Thumbrest touch", XR_ACTION_TYPE_BOOLEAN_INPUT, &thumbrestTouchAction_, true) ||
             !CreateAction("thumb_click", "Thumbstick click", XR_ACTION_TYPE_BOOLEAN_INPUT, &thumbClickAction_, true) ||
             !CreateAction("menu", "Menu", XR_ACTION_TYPE_BOOLEAN_INPUT, &menuAction_, false) ||
             !CreateAction("haptic", "Haptic", XR_ACTION_TYPE_VIBRATION_OUTPUT, &hapticAction_, true)) {
@@ -483,6 +496,16 @@ private:
         bind(primaryAction_, "/user/hand/right/input/a/click");
         bind(secondaryAction_, "/user/hand/left/input/y/click");
         bind(secondaryAction_, "/user/hand/right/input/b/click");
+        bind(primaryTouchAction_, "/user/hand/left/input/x/touch");
+        bind(primaryTouchAction_, "/user/hand/right/input/a/touch");
+        bind(secondaryTouchAction_, "/user/hand/left/input/y/touch");
+        bind(secondaryTouchAction_, "/user/hand/right/input/b/touch");
+        bind(triggerTouchAction_, "/user/hand/left/input/trigger/touch");
+        bind(triggerTouchAction_, "/user/hand/right/input/trigger/touch");
+        bind(thumbstickTouchAction_, "/user/hand/left/input/thumbstick/touch");
+        bind(thumbstickTouchAction_, "/user/hand/right/input/thumbstick/touch");
+        bind(thumbrestTouchAction_, "/user/hand/left/input/thumbrest/touch");
+        bind(thumbrestTouchAction_, "/user/hand/right/input/thumbrest/touch");
         bind(thumbClickAction_, "/user/hand/left/input/thumbstick/click");
         bind(thumbClickAction_, "/user/hand/right/input/thumbstick/click");
         bind(menuAction_, "/user/hand/left/input/menu/click");
@@ -655,14 +678,27 @@ private:
         if (BoolState(thumbClickAction_, hand)) {
             out.buttons |= ButtonThumbstick;
         }
+        if (BoolState(triggerTouchAction_, hand)) {
+            out.buttons |= TouchTrigger;
+        }
+        if (BoolState(thumbstickTouchAction_, hand)) {
+            out.buttons |= TouchThumbstick;
+        }
+        if (BoolState(thumbrestTouchAction_, hand)) {
+            out.buttons |= TouchThumbrest;
+        }
 
         if (index == 0) {
             if (BoolState(primaryAction_, hand)) out.buttons |= ButtonX;
             if (BoolState(secondaryAction_, hand)) out.buttons |= ButtonY;
+            if (BoolState(primaryTouchAction_, hand)) out.buttons |= TouchX;
+            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= TouchY;
             if (BoolState(menuAction_)) out.buttons |= ButtonMenu;
         } else {
             if (BoolState(primaryAction_, hand)) out.buttons |= ButtonA;
             if (BoolState(secondaryAction_, hand)) out.buttons |= ButtonB;
+            if (BoolState(primaryTouchAction_, hand)) out.buttons |= TouchA;
+            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= TouchB;
         }
     }
 
@@ -942,6 +978,11 @@ private:
     XrAction thumbstickAction_ = XR_NULL_HANDLE;
     XrAction primaryAction_ = XR_NULL_HANDLE;
     XrAction secondaryAction_ = XR_NULL_HANDLE;
+    XrAction primaryTouchAction_ = XR_NULL_HANDLE;
+    XrAction secondaryTouchAction_ = XR_NULL_HANDLE;
+    XrAction triggerTouchAction_ = XR_NULL_HANDLE;
+    XrAction thumbstickTouchAction_ = XR_NULL_HANDLE;
+    XrAction thumbrestTouchAction_ = XR_NULL_HANDLE;
     XrAction thumbClickAction_ = XR_NULL_HANDLE;
     XrAction menuAction_ = XR_NULL_HANDLE;
     XrAction hapticAction_ = XR_NULL_HANDLE;
