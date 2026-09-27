@@ -71,6 +71,9 @@ add_custom_command(TARGET driver_deskxr POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quest-unworn-mode.ps1"
         "${DESKXR_DRIVER_ROOT}/quest-unworn-mode.ps1"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quest-start.ps1"
+        "${DESKXR_DRIVER_ROOT}/quest-start.ps1"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/scripts/deskxr-launcher.ps1"
         "${DESKXR_DRIVER_ROOT}/DeskXR.ps1"
     COMMENT "Packaging DeskXR SteamVR driver"
