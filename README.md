@@ -10,6 +10,7 @@ The repository now contains both halves of the first working pipeline:
 
 - **Windows / SteamVR driver**
   - virtual HMD with fixed position and optional mouse-driven yaw/pitch;
+  - monitor-oriented compositor output with a full-size monocular desktop mode or stereo side-by-side mode;
   - left/right virtual controllers;
   - UDP input for 6DoF pose and controller actions;
   - trigger, grip, thumbstick, A/B/X/Y, menu;
@@ -81,6 +82,12 @@ powershell -ExecutionPolicy Bypass -File scripts/install-driver.ps1 -ConfigureFi
 
 The installer searches Steam libraries for SteamVR, registers the driver with `vrpathreg.exe`, and prints likely LAN IPv4 addresses to enter in the Quest app. Restart SteamVR after installing.
 
+## Desktop output
+
+`deskxr_display.desktop_mono` defaults to `true`. In that mode both VR eyes are mapped onto the same full desktop viewport so the monitor gets a normal full-size monocular view instead of a horizontally squeezed stereo image. Set it to `false` for conventional side-by-side output.
+
+The launcher can edit this option and the desktop output resolution. These settings are read when SteamVR loads the driver, so restart SteamVR after changing them.
+
 ## Desktop head look
 
 DeskXR keeps the virtual HMD position fixed, but its orientation can now be controlled from the desktop:
@@ -126,12 +133,15 @@ The GitHub Actions artifact is named:
 
 ## Windows launcher
 
-The Windows driver artifact now includes `DeskXR.ps1`, a small launcher for the common setup tasks:
+The Windows driver artifact now includes `DeskXR.ps1`, a small launcher/config tool for the common setup tasks:
 
 - install/update the SteamVR driver;
 - optionally create the UDP 39742 firewall rule;
 - show likely LAN IPv4 addresses for the Quest app;
 - enable/disable Quest unworn mode through ADB;
+- choose full-size monocular desktop output or stereo side-by-side;
+- set virtual HMD height and mouse-look sensitivity;
+- copy the primary monitor resolution into DeskXR display settings;
 - start SteamVR.
 
 Run it with:
@@ -198,7 +208,7 @@ The PC driver considers controller data stale after one second and reports track
 - validate and tune the new guided two-controller calibration on real hardware;
 - validate haptics on real Quest Touch hardware;
 - validate mouse-look behavior inside VRChat;
-- small launcher/config UI on top of the current self-installer;
+- validate the new mono desktop compositor mode on SteamVR/VRChat;
 - OSC FBT setup helper.
 
 See `docs/architecture.md` for more detail.
