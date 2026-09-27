@@ -2,22 +2,58 @@
 
 DeskXR is an experimental **HMD-less desktop VR bridge**.
 
-The goal is simple: keep VRChat in VR mode while you look at a normal PC monitor, then use real 6DoF controllers for the hands. OSC full-body tracking can remain a separate direct input to VRChat.
+The goal is to keep VRChat in VR mode while you look at a normal PC monitor, use Quest Touch controllers as real 6DoF hands, and optionally let VRChat receive OSC full-body trackers at the same time.
 
-## Current PoC
+## Current end-to-end PoC
 
-The initial PC-side implementation now includes:
+The repository now contains both halves of the first working pipeline:
 
-- a SteamVR/OpenVR server driver;
-- a fixed virtual HMD;
-- left/right virtual controllers;
-- UDP input for two 6DoF hand poses;
-- trigger, grip, thumbstick and face-button input;
-- SteamVR haptic events received and logged;
-- a Python simulator for testing before the Quest client exists;
-- Windows CI that packages a ready-to-register driver artifact.
+- **Windows / SteamVR driver**
+  - fixed virtual HMD;
+  - left/right virtual controllers;
+  - UDP input for 6DoF pose and controller actions;
+  - trigger, grip, thumbstick, A/B/X/Y, menu;
+  - stale-packet tracking loss;
+  - SteamVR haptic events are received and logged.
+- **Quest 3 / Quest 3S client**
+  - native Android + OpenXR;
+  - Oculus Touch interaction profile;
+  - left/right grip poses;
+  - controller inputs;
+  - low-work frame loop with no PC video streaming;
+  - UDP streaming directly to the PC driver;
+  - simple in-headset UI for the PC IPv4 address and port.
+- **CI**
+  - Windows driver artifact;
+  - arm64 Quest debug APK artifact.
 
-## Build
+Both Windows and Quest builds currently pass in GitHub Actions.
+
+## Architecture
+
+    Quest Touch L/R
+          |
+       OpenXR
+          |
+          v
+    DeskXR Quest APK
+          |
+      UDP :39742
+          |
+          v
+    DeskXR SteamVR driver
+       /             \
+ virtual HMD      virtual hands
+       \             /
+            SteamVR
+               |
+             VRChat
+               |
+          PC monitor
+
+OSC FBT intentionally stays separate. If VRChat is running in VR mode through DeskXR, OSC trackers can still be supplied directly to VRChat.
+
+## Build the Windows driver
 
 Requirements: Windows 10/11 x64, Visual Studio 2022 C++ tools, CMake 3.20+, and SteamVR.
 
@@ -30,7 +66,7 @@ The packaged driver is written to:
 
     build/deskxr
 
-Register it:
+Register it with SteamVR:
 
 ~~~powershell
 powershell -ExecutionPolicy Bypass -File scripts/install-driver.ps1
@@ -38,9 +74,9 @@ powershell -ExecutionPolicy Bypass -File scripts/install-driver.ps1
 
 Restart SteamVR after registering the driver.
 
-## First test
+## PC-only smoke test
 
-Run:
+Before involving Quest, test the SteamVR half:
 
 ~~~powershell
 python tools/sim_sender.py
@@ -48,21 +84,72 @@ python tools/sim_sender.py
 
 The simulator sends two moving hand poses to UDP port 39742. SteamVR should see one virtual HMD plus left/right controllers.
 
-The HMD defaults to (0, 1.65, 0). Controller packets are expected in OpenVR-style tracking space: +X right, +Y up, -Z forward.
+## Build the Quest client
+
+Open the project in Android Studio, or use Gradle 8.10.x with Android SDK 35, NDK 27.2.12479018, and CMake 3.22.1:
+
+~~~bash
+gradle :quest:assembleDebug
+~~~
+
+APK output:
+
+    quest/build/outputs/apk/debug/quest-debug.apk
+
+Install by ADB:
+
+~~~bash
+adb install -r quest/build/outputs/apk/debug/quest-debug.apk
+~~~
+
+The GitHub Actions artifact is named:
+
+    DeskXR-Quest-debug
+
+## First real Quest test
+
+1. Build/install and register the Windows driver.
+2. Restart SteamVR.
+3. Make sure Windows Firewall allows inbound UDP 39742.
+4. Install and launch the DeskXR APK on Quest.
+5. Enter the PC's LAN IPv4 address, for example 192.168.1.20.
+6. Press **Start bridge**.
+7. Start VRChat in VR mode.
+
+The Quest client currently locates each controller relative to OpenXR's VIEW reference space and maps that around a fixed virtual head height of 1.65 m. This is deliberately simple for the first hardware test.
+
+## Important hardware experiment
+
+The key unknown is still Quest lifecycle behavior when the headset is **not being worn**.
+
+DeskXR needs the OpenXR session and Touch controller tracking to remain active while the Quest is sitting on or above the monitor. If Horizon OS suspends the session because the proximity sensor says the headset is unworn, the next milestone will need a different lifecycle strategy.
+
+The APK reports the current OpenXR session state and packet rate so this can be tested immediately on real hardware.
 
 ## UDP packet v1
 
-The binary packet is little-endian and fixed-size. It contains a DXR1 header plus left/right hand records with position, quaternion, trigger, grip, joystick, button mask, and pose-valid flags.
+The packet is little-endian and fixed-size. It contains a `DXR1` header plus left/right hand records with:
 
-The PC driver marks controller poses invalid if packets are stale for more than one second.
+- position XYZ;
+- quaternion XYZW;
+- trigger;
+- grip;
+- thumbstick XY;
+- button bitmask;
+- pose-valid flags.
 
-## Next milestone
+The PC driver considers controller data stale after one second and reports tracking loss instead of leaving frozen hands behind.
 
-The next step is a tiny Quest 3 / Quest 3S OpenXR client that reads Touch grip poses and actions and sends the same packet format. It does **not** need PC video streaming.
+## Next milestones
 
-The main platform unknown is whether Quest keeps the OpenXR session and controller tracking alive while the headset is physically not worn. That needs an on-device test.
+- hardware test on Quest 3S while unworn;
+- coordinate calibration instead of the fixed 1.65 m offset;
+- haptics PC -> Quest;
+- optional mouse-driven virtual head yaw/pitch;
+- installer / launcher;
+- OSC FBT setup helper.
 
-See docs/architecture.md for the planned path.
+See `docs/architecture.md` for more detail.
 
 ## License
 
