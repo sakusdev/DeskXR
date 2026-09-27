@@ -1,0 +1,38 @@
+name: Build Windows driver
+
+on:
+  push:
+    branches:
+      - main
+      - "work/**"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Verify package
+        shell: pwsh
+        run: |
+          $dll = "build/deskxr/bin/win64/driver_deskxr.dll"
+          $manifest = "build/deskxr/driver.vrdrivermanifest"
+          if (-not (Test-Path $dll)) { throw "Missing $dll" }
+          if (-not (Test-Path $manifest)) { throw "Missing $manifest" }
+
+      - name: Upload driver
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskXR-Windows-x64
+          path: build/deskxr
+          if-no-files-found: error
