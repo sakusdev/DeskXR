@@ -7,6 +7,8 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
+#include "protocol.hpp"
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -30,71 +32,9 @@
 namespace {
 
 constexpr const char* kTag = "DeskXR";
-constexpr std::uint16_t kProtocolVersion = 1;
-constexpr std::uint16_t kPoseValid = 1u << 0;
 constexpr float kVirtualHeadHeight = 1.65f;
 
-enum Button : std::uint32_t {
-    ButtonA = 1u << 0,
-    ButtonB = 1u << 1,
-    ButtonX = 1u << 2,
-    ButtonY = 1u << 3,
-    ButtonThumbstick = 1u << 4,
-    ButtonMenu = 1u << 5,
-
-    TouchA = 1u << 16,
-    TouchB = 1u << 17,
-    TouchX = 1u << 18,
-    TouchY = 1u << 19,
-    TouchTrigger = 1u << 20,
-    TouchThumbstick = 1u << 21,
-    TouchThumbrest = 1u << 22,
-};
-
-#pragma pack(push, 1)
-struct HandV1 {
-    float position[3];
-    float orientation[4];
-    float trigger;
-    float grip;
-    float joystick[2];
-    std::uint32_t buttons;
-    std::uint32_t flags;
-};
-
-struct PacketV1 {
-    char magic[4];
-    std::uint16_t version;
-    std::uint16_t size;
-    std::uint32_t sequence;
-    HandV1 left;
-    HandV1 right;
-};
-
-struct HapticPacketV1 {
-    char magic[4];
-    std::uint16_t version;
-    std::uint16_t size;
-    std::uint32_t sequence;
-    std::uint8_t hand;
-    std::uint8_t reserved[3];
-    float durationSeconds;
-    float frequencyHz;
-    float amplitude;
-};
-
-struct AckPacketV1 {
-    char magic[4];
-    std::uint16_t version;
-    std::uint16_t size;
-    std::uint32_t sequence;
-};
-#pragma pack(pop)
-
-static_assert(sizeof(HandV1) == 52);
-static_assert(sizeof(PacketV1) == 116);
-static_assert(sizeof(HapticPacketV1) == 28);
-static_assert(sizeof(AckPacketV1) == 12);
+namespace protocol = deskxr::protocol;
 
 void LogI(const char* text) {
     __android_log_print(ANDROID_LOG_INFO, kTag, "%s", text);
@@ -618,7 +558,7 @@ private:
                state.currentState;
     }
 
-    void FillHand(std::size_t index, XrTime time, HandV1& out) {
+    void FillHand(std::size_t index, XrTime time, protocol::HandV1& out) {
         XrSpaceLocation location{XR_TYPE_SPACE_LOCATION};
         const XrResult locateResult = xrLocateSpace(handSpaces_[index], viewSpace_, time, &location);
 
@@ -661,7 +601,7 @@ private:
             out.orientation[1] = yawW * qy + yawY * qw;
             out.orientation[2] = yawW * qz - yawY * qx;
             out.orientation[3] = yawW * qw - yawY * qy;
-            out.flags = kPoseValid;
+            out.flags = protocol::kPoseValid;
         } else {
             out.orientation[3] = 1.0f;
             out.flags = 0;
@@ -676,29 +616,29 @@ private:
         out.joystick[1] = stick.y;
 
         if (BoolState(thumbClickAction_, hand)) {
-            out.buttons |= ButtonThumbstick;
+            out.buttons |= protocol::ButtonThumbstick;
         }
         if (BoolState(triggerTouchAction_, hand)) {
-            out.buttons |= TouchTrigger;
+            out.buttons |= protocol::TouchTrigger;
         }
         if (BoolState(thumbstickTouchAction_, hand)) {
-            out.buttons |= TouchThumbstick;
+            out.buttons |= protocol::TouchThumbstick;
         }
         if (BoolState(thumbrestTouchAction_, hand)) {
-            out.buttons |= TouchThumbrest;
+            out.buttons |= protocol::TouchThumbrest;
         }
 
         if (index == 0) {
-            if (BoolState(primaryAction_, hand)) out.buttons |= ButtonX;
-            if (BoolState(secondaryAction_, hand)) out.buttons |= ButtonY;
-            if (BoolState(primaryTouchAction_, hand)) out.buttons |= TouchX;
-            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= TouchY;
-            if (BoolState(menuAction_)) out.buttons |= ButtonMenu;
+            if (BoolState(primaryAction_, hand)) out.buttons |= protocol::ButtonX;
+            if (BoolState(secondaryAction_, hand)) out.buttons |= protocol::ButtonY;
+            if (BoolState(primaryTouchAction_, hand)) out.buttons |= protocol::TouchX;
+            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= protocol::TouchY;
+            if (BoolState(menuAction_)) out.buttons |= protocol::ButtonMenu;
         } else {
-            if (BoolState(primaryAction_, hand)) out.buttons |= ButtonA;
-            if (BoolState(secondaryAction_, hand)) out.buttons |= ButtonB;
-            if (BoolState(primaryTouchAction_, hand)) out.buttons |= TouchA;
-            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= TouchB;
+            if (BoolState(primaryAction_, hand)) out.buttons |= protocol::ButtonA;
+            if (BoolState(secondaryAction_, hand)) out.buttons |= protocol::ButtonB;
+            if (BoolState(primaryTouchAction_, hand)) out.buttons |= protocol::TouchA;
+            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= protocol::TouchB;
         }
     }
 
@@ -720,11 +660,11 @@ private:
                 break;
             }
 
-            if (received == static_cast<ssize_t>(sizeof(AckPacketV1))) {
-                const auto* ack = reinterpret_cast<const AckPacketV1*>(buffer.data());
-                if (std::memcmp(ack->magic, "DXA1", 4) == 0 &&
-                    ack->version == kProtocolVersion &&
-                    ack->size == sizeof(AckPacketV1)) {
+            if (received == static_cast<ssize_t>(sizeof(protocol::AckPacketV1))) {
+                const auto* ack = reinterpret_cast<const protocol::AckPacketV1*>(buffer.data());
+                if (std::memcmp(ack->magic, protocol::kAckMagic, 4) == 0 &&
+                    ack->version == protocol::kVersion &&
+                    ack->size == sizeof(protocol::AckPacketV1)) {
                     lastAckReceived_ = std::chrono::steady_clock::now();
                     lastAckSequence_ = ack->sequence;
                     ackCount_.fetch_add(1);
@@ -732,19 +672,20 @@ private:
                 }
             }
 
-            if (received != static_cast<ssize_t>(sizeof(HapticPacketV1))) {
+            if (received != static_cast<ssize_t>(sizeof(protocol::HapticPacketV1))) {
                 continue;
             }
 
-            const auto* packet = reinterpret_cast<const HapticPacketV1*>(buffer.data());
-            if (std::memcmp(packet->magic, "DXH1", 4) != 0) continue;
-            if (packet->version != kProtocolVersion) continue;
-            if (packet->size != sizeof(HapticPacketV1)) continue;
-            if (packet->hand > 1) continue;
+            const auto* packet = reinterpret_cast<const protocol::HapticPacketV1*>(buffer.data());
+            if (std::memcmp(packet->magic, protocol::kHapticMagic, 4) != 0) continue;
+            if (packet->version != protocol::kVersion) continue;
+            if (packet->size != sizeof(protocol::HapticPacketV1)) continue;
+            const auto handIndex = static_cast<std::size_t>(packet->hand);
+            if (handIndex >= handPaths_.size()) continue;
 
             XrHapticActionInfo info{XR_TYPE_HAPTIC_ACTION_INFO};
             info.action = hapticAction_;
-            info.subactionPath = handPaths_[packet->hand];
+            info.subactionPath = handPaths_[handIndex];
 
             XrHapticVibration vibration{XR_TYPE_HAPTIC_VIBRATION};
             vibration.amplitude = std::clamp(packet->amplitude, 0.0f, 1.0f);
@@ -791,10 +732,10 @@ private:
         syncInfo.countActiveActionSets = 1;
         syncInfo.activeActionSets = &active;
 
-        PacketV1 packet{};
-        std::memcpy(packet.magic, "DXR1", 4);
-        packet.version = kProtocolVersion;
-        packet.size = sizeof(PacketV1);
+        protocol::PacketV1 packet{};
+        std::memcpy(packet.magic, protocol::kTrackingMagic, 4);
+        packet.version = protocol::kVersion;
+        packet.size = sizeof(protocol::PacketV1);
         packet.sequence = sequence_++;
 
         const XrResult syncResult = xrSyncActions(session_, &syncInfo);
