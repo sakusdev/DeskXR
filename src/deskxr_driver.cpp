@@ -50,6 +50,53 @@ std::int32_t ReadInt(const char* section, const char* key, std::int32_t fallback
     return err == vr::VRSettingsError_None ? value : fallback;
 }
 
+bool ValidateAndNormalizeHand(protocol::HandV1& hand) {
+    const auto finite = [](float value) { return std::isfinite(value); };
+
+    if (!finite(hand.trigger) || !finite(hand.grip) ||
+        !finite(hand.joystick[0]) || !finite(hand.joystick[1])) {
+        return false;
+    }
+
+    if ((hand.flags & protocol::kPoseValid) == 0) {
+        return true;
+    }
+
+    for (float value : hand.position) {
+        if (!finite(value) || std::fabs(value) > 100.0f) {
+            return false;
+        }
+    }
+
+    for (float value : hand.orientation) {
+        if (!finite(value)) {
+            return false;
+        }
+    }
+
+    const float normSquared =
+        hand.orientation[0] * hand.orientation[0] +
+        hand.orientation[1] * hand.orientation[1] +
+        hand.orientation[2] * hand.orientation[2] +
+        hand.orientation[3] * hand.orientation[3];
+
+    if (!finite(normSquared) || normSquared < 0.01f || normSquared > 100.0f) {
+        return false;
+    }
+
+    const float inverseNorm = 1.0f / std::sqrt(normSquared);
+    for (float& value : hand.orientation) {
+        value *= inverseNorm;
+    }
+
+    return true;
+}
+
+bool ValidateAndNormalizePacket(protocol::PacketV1& packet) {
+    return ValidateAndNormalizeHand(packet.left) &&
+           ValidateAndNormalizeHand(packet.right);
+}
+
 struct Snapshot {
     protocol::PacketV1 packet{};
     bool fresh = false;
@@ -134,6 +181,7 @@ public:
         {
             std::scoped_lock lock(peerMutex_);
             hasPeer_ = false;
+            hasSequence_ = false;
         }
 
         if (wsaStarted_) {
@@ -149,6 +197,9 @@ public:
         {
             std::scoped_lock lock(peerMutex_);
             if (!hasPeer_) return false;
+            if ((std::chrono::steady_clock::now() - lastPeerAccepted_) > 1500ms) {
+                return false;
+            }
             peer = peer_;
         }
 
@@ -200,11 +251,47 @@ private:
             if (std::memcmp(packet.magic, protocol::kTrackingMagic, 4) != 0) continue;
             if (packet.version != protocol::kVersion) continue;
             if (packet.size != sizeof(protocol::PacketV1)) continue;
+            if (!ValidateAndNormalizePacket(packet)) continue;
 
+            const auto now = std::chrono::steady_clock::now();
             {
                 std::scoped_lock lock(peerMutex_);
+
+                const bool peerFresh =
+                    hasPeer_ && (now - lastPeerAccepted_) < 1500ms;
+                const bool samePeer =
+                    hasPeer_ &&
+                    peer_.sin_addr.s_addr == from.sin_addr.s_addr &&
+                    peer_.sin_port == from.sin_port;
+
+                // While a Quest peer is actively streaming, ignore another
+                // sender trying to take over the controller stream.
+                if (peerFresh && !samePeer) {
+                    continue;
+                }
+
+                if (!peerFresh || !samePeer) {
+                    hasSequence_ = false;
+                }
+
+                if (hasSequence_) {
+                    const auto delta =
+                        static_cast<std::int32_t>(packet.sequence - lastSequence_);
+
+                    // A fresh sender can restart its sequence counter at zero.
+                    const bool explicitRestart =
+                        packet.sequence == 0u && lastSequence_ > 32u;
+
+                    if (delta <= 0 && !explicitRestart) {
+                        continue;
+                    }
+                }
+
                 peer_ = from;
                 hasPeer_ = true;
+                lastPeerAccepted_ = now;
+                lastSequence_ = packet.sequence;
+                hasSequence_ = true;
             }
 
             state_.Store(packet);
@@ -236,6 +323,9 @@ private:
     mutable std::mutex peerMutex_;
     sockaddr_in peer_{};
     bool hasPeer_ = false;
+    std::chrono::steady_clock::time_point lastPeerAccepted_{};
+    std::uint32_t lastSequence_ = 0;
+    bool hasSequence_ = false;
     std::atomic_uint32_t hapticSequence_{0};
 };
 
