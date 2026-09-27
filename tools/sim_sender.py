@@ -17,6 +17,7 @@ BUTTON_X = 1 << 2
 HEADER = struct.Struct("<4sHHI")
 HAND = struct.Struct("<3f4f2f2fII")
 HAPTIC = struct.Struct("<4sHHIB3x3f")
+ACK = struct.Struct("<4sHHI")
 PACKET_SIZE = HEADER.size + HAND.size * 2
 
 
@@ -83,18 +84,22 @@ def main():
                 except BlockingIOError:
                     break
 
-                if len(data) != HAPTIC.size:
+                if len(data) == ACK.size:
+                    magic, version, size, ack_sequence = ACK.unpack(data)
+                    if magic == b"DXA1" and version == VERSION and size == ACK.size:
+                        print(f"PC link ack for tracking #{ack_sequence}")
                     continue
 
-                magic, version, size, haptic_sequence, hand, duration, frequency, amplitude = HAPTIC.unpack(data)
-                if magic != b"DXH1" or version != VERSION or size != HAPTIC.size:
-                    continue
+                if len(data) == HAPTIC.size:
+                    magic, version, size, haptic_sequence, hand, duration, frequency, amplitude = HAPTIC.unpack(data)
+                    if magic != b"DXH1" or version != VERSION or size != HAPTIC.size:
+                        continue
 
-                hand_name = "left" if hand == 0 else "right"
-                print(
-                    f"haptic #{haptic_sequence} {hand_name}: "
-                    f"{duration:.3f}s {frequency:.1f}Hz amp={amplitude:.2f}"
-                )
+                    hand_name = "left" if hand == 0 else "right"
+                    print(
+                        f"haptic #{haptic_sequence} {hand_name}: "
+                        f"{duration:.3f}s {frequency:.1f}Hz amp={amplitude:.2f}"
+                    )
 
             elapsed = time.perf_counter() - frame_start
             if elapsed < interval:
