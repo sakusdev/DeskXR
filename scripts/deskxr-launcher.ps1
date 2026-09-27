@@ -267,7 +267,7 @@ $useDisplay = New-DeskButton "Use primary monitor size" 328 372
 $install = New-DeskButton "Install / update SteamVR driver" 28 430
 $firewall = New-DeskButton "Install + allow UDP 39742" 328 430
 $questStart = New-DeskButton "Start Quest bridge (ADB)" 28 486
-$restore = New-DeskButton "Restore Quest proximity sensor" 328 486
+$restore = New-DeskButton "Stop Quest bridge + restore" 328 486
 $steamvr = New-DeskButton "Start SteamVR" 28 542
 $installQuest = New-DeskButton "Install Quest APK..." 328 542
 
@@ -385,9 +385,9 @@ $questStart.Add_Click({
 
 $restore.Add_Click({
     try {
-        $script = Get-HelperPath "quest-unworn-mode.ps1" "quest-unworn-mode.ps1"
-        Invoke-Helper $script @("-Disable")
-        $status.Text = "Quest proximity sensor restored."
+        $script = Get-HelperPath "quest-stop.ps1" "quest-stop.ps1"
+        Invoke-Helper $script
+        $status.Text = "Quest DeskXR bridge stopped and proximity sensor restored."
     } catch {
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "DeskXR") | Out-Null
     }
