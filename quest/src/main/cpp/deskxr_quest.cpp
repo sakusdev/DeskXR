@@ -107,6 +107,10 @@ public:
         quickCalibrated_ = false;
         calibrationPending_ = false;
         calibrationRequested_ = false;
+        lastRttMs_ = -1.0;
+        for (auto& stamp : sentStamps_) {
+            stamp.valid = false;
+        }
 
         stopRequested_ = false;
         running_ = true;
@@ -751,9 +755,19 @@ private:
                 if (std::memcmp(ack->magic, protocol::kAckMagic, 4) == 0 &&
                     ack->version == protocol::kVersion &&
                     ack->size == sizeof(protocol::AckPacketV1)) {
-                    lastAckReceived_ = std::chrono::steady_clock::now();
+                    const auto ackNow = std::chrono::steady_clock::now();
+                    lastAckReceived_ = ackNow;
                     lastAckSequence_ = ack->sequence;
                     ackCount_.fetch_add(1);
+
+                    auto& stamp = sentStamps_[ack->sequence % sentStamps_.size()];
+                    if (stamp.valid && stamp.sequence == ack->sequence) {
+                        lastRttMs_ =
+                                std::chrono::duration<double, std::milli>(
+                                        ackNow - stamp.sentAt)
+                                        .count();
+                    }
+
                     continue;
                 }
             }
@@ -766,6 +780,12 @@ private:
             if (std::memcmp(packet->magic, protocol::kHapticMagic, 4) != 0) continue;
             if (packet->version != protocol::kVersion) continue;
             if (packet->size != sizeof(protocol::HapticPacketV1)) continue;
+            if (!std::isfinite(packet->durationSeconds) ||
+                !std::isfinite(packet->frequencyHz) ||
+                !std::isfinite(packet->amplitude)) {
+                continue;
+            }
+
             const auto handIndex = static_cast<std::size_t>(packet->hand);
             if (handIndex >= handPaths_.size()) continue;
 
@@ -848,6 +868,11 @@ private:
             packet.right.orientation[3] = 1.0f;
         }
 
+        auto& stamp = sentStamps_[packet.sequence % sentStamps_.size()];
+        stamp.sequence = packet.sequence;
+        stamp.sentAt = std::chrono::steady_clock::now();
+        stamp.valid = true;
+
         sendto(
                 socket_,
                 &packet,
@@ -925,11 +950,17 @@ private:
                     calibrationText = "pending-" + std::to_string(seconds) + "s";
                 }
 
+                const std::string rttText =
+                        lastRttMs_ >= 0.0
+                                ? std::to_string(static_cast<int>(std::lround(lastRttMs_))) + "ms"
+                                : "--";
+
                 SetStatus(
                         std::string("Streaming to ") + host_ + ":" + std::to_string(port_) +
                         " | OpenXR " + SessionStateName(sessionState_) +
                         " | " + std::to_string(fps) + " packets/s" +
                         " | PC " + (pcLinked ? "linked" : "no-ack") +
+                        " | RTT " + rttText +
                         " | calib " + calibrationText +
                         " | haptics " + std::to_string(hapticCount_.load()));
             }
@@ -1054,9 +1085,17 @@ private:
     EGLContext eglContext_ = EGL_NO_CONTEXT;
     EGLSurface eglSurface_ = EGL_NO_SURFACE;
 
+    struct SentStamp {
+        std::uint32_t sequence = 0;
+        std::chrono::steady_clock::time_point sentAt{};
+        bool valid = false;
+    };
+
     std::uint32_t sequence_ = 0;
+    std::array<SentStamp, 256> sentStamps_{};
     std::chrono::steady_clock::time_point lastAckReceived_{};
     std::uint32_t lastAckSequence_ = 0;
+    double lastRttMs_ = -1.0;
     std::atomic_uint64_t ackCount_{0};
     std::atomic_uint64_t hapticCount_{0};
 };
