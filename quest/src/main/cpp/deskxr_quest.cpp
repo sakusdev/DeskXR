@@ -374,7 +374,18 @@ private:
         XrReferenceSpaceCreateInfo viewInfo{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
         viewInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
         viewInfo.poseInReferenceSpace.orientation.w = 1.0f;
-        return Check(xrCreateReferenceSpace(session_, &viewInfo, &viewSpace_), "xrCreateReferenceSpace(VIEW)");
+        if (!Check(
+                    xrCreateReferenceSpace(session_, &viewInfo, &viewSpace_),
+                    "xrCreateReferenceSpace(VIEW)")) {
+            return false;
+        }
+
+        XrReferenceSpaceCreateInfo localInfo{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
+        localInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+        localInfo.poseInReferenceSpace.orientation.w = 1.0f;
+        return Check(
+                xrCreateReferenceSpace(session_, &localInfo, &localSpace_),
+                "xrCreateReferenceSpace(LOCAL)");
     }
 
     XrPath Path(const char* text) {
@@ -643,7 +654,7 @@ private:
 
         for (std::size_t hand = 0; hand < locations.size(); ++hand) {
             const XrResult result =
-                    xrLocateSpace(handSpaces_[hand], viewSpace_, time, &locations[hand]);
+                    xrLocateSpace(handSpaces_[hand], localSpace_, time, &locations[hand]);
             if (XR_FAILED(result) ||
                 (locations[hand].locationFlags & needed) != needed) {
                 SetStatus("Quick calibration failed: both controller poses must be tracked.");
@@ -699,7 +710,12 @@ private:
 
     void FillHand(std::size_t index, XrTime time, protocol::HandV1& out) {
         XrSpaceLocation location{XR_TYPE_SPACE_LOCATION};
-        const XrResult locateResult = xrLocateSpace(handSpaces_[index], viewSpace_, time, &location);
+        const XrSpace baseSpace =
+                quickCalibrated_ && localSpace_ != XR_NULL_HANDLE
+                        ? localSpace_
+                        : viewSpace_;
+        const XrResult locateResult =
+                xrLocateSpace(handSpaces_[index], baseSpace, time, &location);
 
         const XrSpaceLocationFlags needed =
                 XR_SPACE_LOCATION_POSITION_VALID_BIT |
@@ -733,7 +749,9 @@ private:
             const float yawY = std::sin(halfYaw);
             const float yawW = std::cos(halfYaw);
 
-            // q_virtual = q_yaw * q_view.
+            // q_virtual = q_yaw * q_source. After quick calibration the
+            // source is LOCAL space, so headset pitch/roll no longer tilts
+            // the controller coordinate frame.
             out.orientation[0] = yawW * qx + yawY * qz;
             out.orientation[1] = yawW * qy + yawY * qw;
             out.orientation[2] = yawW * qz - yawY * qx;
@@ -1041,6 +1059,11 @@ private:
             }
         }
 
+        if (localSpace_ != XR_NULL_HANDLE) {
+            xrDestroySpace(localSpace_);
+            localSpace_ = XR_NULL_HANDLE;
+        }
+
         if (viewSpace_ != XR_NULL_HANDLE) {
             xrDestroySpace(viewSpace_);
             viewSpace_ = XR_NULL_HANDLE;
@@ -1118,6 +1141,7 @@ private:
     std::atomic_bool sessionRunning_{false};
 
     XrSpace viewSpace_ = XR_NULL_HANDLE;
+    XrSpace localSpace_ = XR_NULL_HANDLE;
     std::array<XrPath, 2> handPaths_{XR_NULL_PATH, XR_NULL_PATH};
     std::array<XrSpace, 2> handSpaces_{XR_NULL_HANDLE, XR_NULL_HANDLE};
 
