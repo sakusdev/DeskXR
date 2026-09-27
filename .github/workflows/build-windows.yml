@@ -8,6 +8,7 @@ on:
     paths:
       - "CMakeLists.txt"
       - "src/**"
+      - "common/**"
       - "driver/**"
       - "scripts/install-driver.ps1"
       - ".github/workflows/build-windows.yml"
@@ -15,6 +16,7 @@ on:
     paths:
       - "CMakeLists.txt"
       - "src/**"
+      - "common/**"
       - "driver/**"
       - "scripts/install-driver.ps1"
       - ".github/workflows/build-windows.yml"
