@@ -91,7 +91,15 @@ const char* SessionStateName(XrSessionState state) {
 
 class Bridge {
 public:
-    bool Start(JNIEnv* env, jobject activity, const std::string& host, int port) {
+    bool Start(
+            JNIEnv* env,
+            jobject activity,
+            const std::string& host,
+            int port,
+            float headHeight,
+            float cameraDistance,
+            float cameraYOffset,
+            bool facingUser) {
         if (running_.load()) {
             return true;
         }
@@ -115,6 +123,10 @@ public:
 
         host_ = host;
         port_ = port;
+        headHeight_ = headHeight;
+        cameraDistance_ = cameraDistance;
+        cameraYOffset_ = cameraYOffset;
+        facingUser_ = facingUser;
         stopRequested_ = false;
         running_ = true;
         worker_ = std::thread([this] { ThreadMain(); });
@@ -571,14 +583,36 @@ private:
                 (location.locationFlags & needed) == needed;
 
         if (poseValid) {
-            out.position[0] = location.pose.position.x;
-            out.position[1] = location.pose.position.y + kVirtualHeadHeight;
-            out.position[2] = location.pose.position.z;
+            const float yaw = facingUser_ ? 3.14159265358979323846f : 0.0f;
+            const float cosYaw = std::cos(yaw);
+            const float sinYaw = std::sin(yaw);
 
-            out.orientation[0] = location.pose.orientation.x;
-            out.orientation[1] = location.pose.orientation.y;
-            out.orientation[2] = location.pose.orientation.z;
-            out.orientation[3] = location.pose.orientation.w;
+            const float sourceX = location.pose.position.x;
+            const float sourceY = location.pose.position.y;
+            const float sourceZ = location.pose.position.z;
+
+            // Quest VIEW space is centered on the physical headset. Map that
+            // camera frame into a virtual user-head frame. A monitor-mounted
+            // Quest normally faces the user, so its horizontal axes need a
+            // 180-degree yaw before adding the camera-to-head translation.
+            out.position[0] = cosYaw * sourceX + sinYaw * sourceZ;
+            out.position[1] = headHeight_ + cameraYOffset_ + sourceY;
+            out.position[2] = -cameraDistance_ - sinYaw * sourceX + cosYaw * sourceZ;
+
+            const float qx = location.pose.orientation.x;
+            const float qy = location.pose.orientation.y;
+            const float qz = location.pose.orientation.z;
+            const float qw = location.pose.orientation.w;
+
+            const float halfYaw = yaw * 0.5f;
+            const float yawY = std::sin(halfYaw);
+            const float yawW = std::cos(halfYaw);
+
+            // q_virtual = q_yaw * q_view.
+            out.orientation[0] = yawW * qx + yawY * qz;
+            out.orientation[1] = yawW * qy + yawY * qw;
+            out.orientation[2] = yawW * qz - yawY * qx;
+            out.orientation[3] = yawW * qw - yawY * qy;
             out.flags = kPoseValid;
         } else {
             out.orientation[3] = 1.0f;
@@ -772,6 +806,10 @@ private:
 
     std::string host_;
     int port_ = 39742;
+    float headHeight_ = kVirtualHeadHeight;
+    float cameraDistance_ = 0.70f;
+    float cameraYOffset_ = -0.30f;
+    bool facingUser_ = true;
 
     mutable std::mutex statusMutex_;
     std::string status_ = "Idle";
@@ -821,14 +859,26 @@ Java_org_sakus_deskxr_MainActivity_nativeStart(
         jclass,
         jobject activity,
         jstring host,
-        jint port) {
+        jint port,
+        jfloat headHeight,
+        jfloat cameraDistance,
+        jfloat cameraYOffset,
+        jboolean facingUser) {
     const char* rawHost = env->GetStringUTFChars(host, nullptr);
     const std::string hostText = rawHost != nullptr ? rawHost : "";
     if (rawHost != nullptr) {
         env->ReleaseStringUTFChars(host, rawHost);
     }
 
-    return gBridge.Start(env, activity, hostText, port) ? JNI_TRUE : JNI_FALSE;
+    return gBridge.Start(
+            env,
+            activity,
+            hostText,
+            port,
+            headHeight,
+            cameraDistance,
+            cameraYOffset,
+            facingUser == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
