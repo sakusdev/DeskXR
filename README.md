@@ -124,6 +124,38 @@ The GitHub Actions artifact is named:
 
     DeskXR-Quest-debug
 
+## Windows launcher
+
+The Windows driver artifact now includes `DeskXR.ps1`, a small launcher for the common setup tasks:
+
+- install/update the SteamVR driver;
+- optionally create the UDP 39742 firewall rule;
+- show likely LAN IPv4 addresses for the Quest app;
+- enable/disable Quest unworn mode through ADB;
+- start SteamVR.
+
+Run it with:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\DeskXR.ps1
+~~~
+
+## Quest unworn mode
+
+Meta documents that the Quest proximity sensor normally puts the headset to sleep as soon as it is removed, which pauses the OpenXR runtime. For DeskXR development/testing, the Windows artifact includes a helper that asks Horizon OS to behave as if the headset is still worn:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\quest-unworn-mode.ps1
+~~~
+
+Restore normal proximity behavior when finished:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\quest-unworn-mode.ps1 -Disable
+~~~
+
+This requires an authorized ADB connection to the Quest.
+
 ## First real Quest test
 
 1. Build/install and register the Windows driver.
@@ -138,11 +170,9 @@ The Quest client locates each controller relative to OpenXR's VIEW reference spa
 
 ## Important hardware experiment
 
-The key unknown is still Quest lifecycle behavior when the headset is **not being worn**.
+By default, Quest sleeps when the proximity sensor says the headset is not being worn, which pauses the OpenXR runtime. DeskXR now includes the ADB-based unworn helper above so this can be explicitly overridden during testing.
 
-DeskXR needs the OpenXR session and Touch controller tracking to remain active while the Quest is sitting on or above the monitor. If Horizon OS suspends the session because the proximity sensor says the headset is unworn, the next milestone will need a different lifecycle strategy.
-
-The APK reports the current OpenXR session state, packet rate, PC acknowledgement state, and received haptic count so this can be tested immediately on real hardware. `PC linked` means the SteamVR driver is receiving Quest packets and replying over the same UDP socket.
+The APK reports the current OpenXR session state, packet rate, PC acknowledgement state, and received haptic count. `PC linked` means the SteamVR driver is receiving Quest packets and replying over the same UDP socket.
 
 ## UDP packet v1
 
@@ -160,7 +190,7 @@ The PC driver considers controller data stale after one second and reports track
 
 ## Next milestones
 
-- hardware test on Quest 3S while unworn;
+- hardware test on Quest 3S with the documented unworn ADB override enabled;
 - refine the current manual mount calibration into a guided calibration flow;
 - validate haptics on real Quest Touch hardware;
 - validate mouse-look behavior inside VRChat;
