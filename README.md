@@ -15,6 +15,7 @@ The repository now contains both halves of the first working pipeline:
   - UDP input for 6DoF pose and controller actions;
   - trigger, grip, thumbstick, A/B/X/Y, menu;
   - stale-packet tracking loss;
+  - finite-difference linear/angular velocity estimation for SteamVR pose prediction;
   - SteamVR haptic events are forwarded back to the matching Quest Touch controller;
   - reverse-link acknowledgements let the Quest app detect whether the PC driver is actually receiving packets.
 - **Quest 3 / Quest 3S client**
@@ -167,7 +168,7 @@ powershell -ExecutionPolicy Bypass -File .\quest-unworn-mode.ps1 -Disable
 
 This requires an authorized ADB connection to the Quest.
 
-For a mostly headset-free startup, the packaged launcher can now do both steps at once. **Start Quest bridge (ADB)** enables the unworn override, launches `org.sakus.deskxr/.MainActivity`, passes the selected PC IPv4 address/UDP port through Android intent extras, and asks the app to start the OpenXR bridge automatically.
+For a mostly headset-free startup, the packaged launcher can now do both steps at once. **Start Quest bridge (ADB)** enables the unworn override, launches `org.sakus.deskxr/.MainActivity`, passes the selected PC IPv4 address/UDP port through Android intent extras, and asks the app to start the OpenXR bridge automatically. **Stop Quest bridge + restore** force-stops DeskXR and returns proximity handling to the physical sensor.
 
 The raw helper is:
 
