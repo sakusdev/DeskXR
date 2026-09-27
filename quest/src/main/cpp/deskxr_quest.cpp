@@ -660,6 +660,11 @@ private:
                 break;
             }
 
+            if (from.sin_addr.s_addr != destination_.sin_addr.s_addr ||
+                from.sin_port != destination_.sin_port) {
+                continue;
+            }
+
             if (received == static_cast<ssize_t>(sizeof(protocol::AckPacketV1))) {
                 const auto* ack = reinterpret_cast<const protocol::AckPacketV1*>(buffer.data());
                 if (std::memcmp(ack->magic, protocol::kAckMagic, 4) == 0 &&
