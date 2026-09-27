@@ -1027,7 +1027,7 @@ private:
     XrSystemId systemId_ = XR_NULL_SYSTEM_ID;
     XrSession session_ = XR_NULL_HANDLE;
     XrSessionState sessionState_ = XR_SESSION_STATE_UNKNOWN;
-    bool sessionRunning_ = false;
+    std::atomic_bool sessionRunning_{false};
 
     XrSpace viewSpace_ = XR_NULL_HANDLE;
     std::array<XrPath, 2> handPaths_{XR_NULL_PATH, XR_NULL_PATH};
