@@ -10,7 +10,7 @@ on:
       - "src/**"
       - "common/**"
       - "driver/**"
-      - "scripts/install-driver.ps1"
+      - "scripts/**"
       - ".github/workflows/build-windows.yml"
   workflow_dispatch:
 
