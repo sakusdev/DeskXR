@@ -110,6 +110,17 @@ The APK reports OpenXR session state and outgoing packet rate to make this easy 
 
 If the session is suspended while unworn, lifecycle handling becomes the next blocker before tracking quality.
 
+## Desktop display modes
+
+The virtual HMD exposes an OpenVR `IVRDisplayComponent` backed by a normal desktop window.
+
+DeskXR supports two viewport layouts:
+
+- **desktop mono** (default): both eyes target the same full-size desktop viewport. The second compositor eye effectively occupies the same monitor area, which avoids the squeezed side-by-side presentation and is intended for HMD-less monitor use;
+- **stereo SBS**: left and right eyes use separate half-width viewports.
+
+The window size is configurable and the Windows launcher can copy the current primary monitor resolution into `default.vrsettings`.
+
 ## Head modes
 
 The PC virtual HMD keeps a fixed position, but mouse yaw/pitch is now implemented.
