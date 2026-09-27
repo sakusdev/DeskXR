@@ -690,6 +690,8 @@ private:
         transformOffset_[1] = targetY - midY;
         transformOffset_[2] = targetZ - rotatedMidZ;
 
+        calibrationPending_ = false;
+        calibrationRequested_.store(false);
         quickCalibrated_ = true;
         SetStatus("Quick calibration captured.");
         return true;
