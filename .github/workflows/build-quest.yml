@@ -18,6 +18,10 @@ on:
       - ".github/workflows/build-quest.yml"
   workflow_dispatch:
 
+concurrency:
+  group: deskxr-quest-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
