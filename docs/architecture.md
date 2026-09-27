@@ -101,12 +101,15 @@ If the session is suspended while unworn, lifecycle handling becomes the next bl
 
 ## Head modes
 
-The PC virtual HMD is currently fixed.
+The PC virtual HMD keeps a fixed position, but mouse yaw/pitch is now implemented.
 
-Possible later modes:
+- F8 toggles global mouse-look capture;
+- F9 resets yaw/pitch;
+- the driver recenters the desktop cursor while capture is active;
+- sensitivity and pitch limit come from the DeskXR driver settings.
 
-- fixed;
-- mouse yaw/pitch;
+Possible later head modes still include:
+
 - FBT-assisted position plus mouse rotation;
 - optional external pose input.
 
@@ -150,5 +153,5 @@ Because the PC replies to the source endpoint of the latest valid `DXR1` packet,
 1. install the APK on Quest 3S and test unworn session behavior;
 2. replace manual mount calibration with a guided calibration flow;
 3. validate bidirectional haptics on real Quest Touch hardware;
-4. add optional mouse head rotation;
+4. validate mouse head rotation in VRChat and decide whether to expose it through a launcher instead of global hotkeys;
 5. turn the current self-installing Windows artifact into a small launcher/config UI.
