@@ -37,6 +37,7 @@ The Windows driver currently provides:
 - reverse haptic packets back to the most recent valid Quest peer;
 - periodic acknowledgement packets so the Quest can verify the PC link;
 - one-second stale packet detection;
+- derived linear/angular hand velocity for OpenVR prediction;
 - a simulator for testing without Quest.
 
 ### Quest
@@ -142,6 +143,20 @@ DeskXR does not need to convert OSC trackers into SteamVR trackers.
 Once VRChat is running in VR mode through DeskXR, an existing OSC FBT sender can continue sending hip/chest/knee/foot tracker poses directly to VRChat.
 
 This keeps the bridge small and avoids duplicating VRChat's OSC tracker path.
+
+## Pose prediction
+
+The tracking packet intentionally stays small and does not carry velocity fields. On the PC, DeskXR derives linear and angular velocity from consecutive validated poses before passing `DriverPose_t` to SteamVR.
+
+The estimator:
+
+- ignores intervals below 2 ms or above 100 ms;
+- clamps extreme linear/angular components;
+- resolves quaternion sign flips using the shortest rotation arc;
+- low-pass filters the result;
+- resets when tracking is invalid or a large timing discontinuity occurs.
+
+This gives SteamVR useful velocity data for its normal pose prediction without changing the v1 wire format.
 
 ## UDP protocol v1
 
