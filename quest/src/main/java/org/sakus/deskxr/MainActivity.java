@@ -2,6 +2,7 @@ package org.sakus.deskxr;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -173,40 +174,88 @@ public final class MainActivity extends Activity {
                 return;
             }
 
-            final String host = hostField.getText().toString().trim();
-            final int port = parsePort(portField.getText().toString());
-            final float headHeight = parseFloat(headHeightField.getText().toString(), 1.65f);
-            final float cameraDistance = Math.max(
-                    0.0f,
-                    parseFloat(cameraDistanceField.getText().toString(), 0.70f));
-            final float cameraY = parseFloat(cameraYField.getText().toString(), -0.30f);
-            final boolean facingUser = facingUserField.isChecked();
-
-            if (host.isEmpty()) {
-                statusView.setText("Enter the PC IPv4 address.");
-                return;
-            }
-
-            prefs.edit()
-                    .putString(KEY_HOST, host)
-                    .putInt(KEY_PORT, port)
-                    .putFloat(KEY_HEAD_HEIGHT, headHeight)
-                    .putFloat(KEY_CAMERA_DISTANCE, cameraDistance)
-                    .putFloat(KEY_CAMERA_Y, cameraY)
-                    .putBoolean(KEY_FACING_USER, facingUser)
-                    .apply();
-
-            if (!nativeStart(
-                    this,
-                    host,
-                    port,
-                    headHeight,
-                    cameraDistance,
-                    cameraY,
-                    facingUser)) {
-                statusView.setText(nativeGetStatus());
-            }
+            startBridge();
         });
+
+        applyLaunchIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        applyLaunchIntent(intent);
+    }
+
+    private void applyLaunchIntent(Intent intent) {
+        if (intent == null || hostField == null) {
+            return;
+        }
+
+        final String host = intent.getStringExtra("deskxr_host");
+        if (host != null && !host.trim().isEmpty()) {
+            hostField.setText(host.trim());
+        }
+
+        if (intent.hasExtra("deskxr_port")) {
+            final int port = intent.getIntExtra("deskxr_port", 39742);
+            portField.setText(Integer.toString(
+                    port >= 1 && port <= 65535 ? port : 39742));
+        }
+
+        if (!intent.getBooleanExtra("deskxr_autostart", false)) {
+            return;
+        }
+
+        intent.removeExtra("deskxr_autostart");
+
+        handler.postDelayed(() -> {
+            if (nativeIsRunning()) {
+                nativeStop();
+            }
+            startBridge();
+        }, 250);
+    }
+
+    private void startBridge() {
+        final SharedPreferences prefs =
+                getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+
+        final String host = hostField.getText().toString().trim();
+        final int port = parsePort(portField.getText().toString());
+        final float headHeight =
+                parseFloat(headHeightField.getText().toString(), 1.65f);
+        final float cameraDistance = Math.max(
+                0.0f,
+                parseFloat(cameraDistanceField.getText().toString(), 0.70f));
+        final float cameraY =
+                parseFloat(cameraYField.getText().toString(), -0.30f);
+        final boolean facingUser = facingUserField.isChecked();
+
+        if (host.isEmpty()) {
+            statusView.setText("Enter the PC IPv4 address.");
+            return;
+        }
+
+        prefs.edit()
+                .putString(KEY_HOST, host)
+                .putInt(KEY_PORT, port)
+                .putFloat(KEY_HEAD_HEIGHT, headHeight)
+                .putFloat(KEY_CAMERA_DISTANCE, cameraDistance)
+                .putFloat(KEY_CAMERA_Y, cameraY)
+                .putBoolean(KEY_FACING_USER, facingUser)
+                .apply();
+
+        if (!nativeStart(
+                this,
+                host,
+                port,
+                headHeight,
+                cameraDistance,
+                cameraY,
+                facingUser)) {
+            statusView.setText(nativeGetStatus());
+        }
     }
 
     @Override
