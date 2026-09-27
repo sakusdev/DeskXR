@@ -38,7 +38,7 @@ target_compile_definitions(driver_deskxr PRIVATE
     _CRT_SECURE_NO_WARNINGS
 )
 
-target_link_libraries(driver_deskxr PRIVATE ws2_32)
+target_link_libraries(driver_deskxr PRIVATE ws2_32 user32)
 
 if(MSVC)
     target_compile_options(driver_deskxr PRIVATE /W4 /permissive-)
