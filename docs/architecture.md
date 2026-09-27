@@ -59,13 +59,18 @@ It currently:
 
 The Android UI only configures the PC IPv4 address and UDP port.
 
-## Why VIEW space
+## Tracking spaces
 
 For an HMD-less setup, the Quest itself is expected to be placed somewhere near the monitor and used as a tracking camera/base.
 
-Using VIEW space makes the controller packet relative to the current Quest headset pose.
+DeskXR uses two OpenXR reference spaces:
 
-The current Quest UI now applies a configurable camera-to-user transform. It exposes virtual head height, Quest-to-head distance, Quest vertical offset, and a facing-user preset. The preset applies a 180-degree yaw before translating the controller pose into the virtual head frame, which is the expected geometry for a Quest mounted on or above a monitor with its cameras looking at the user.
+- **VIEW** for the manual startup transform. Controller coordinates are relative to the physical Quest pose, which makes the simple measured camera-to-user offsets intuitive;
+- **LOCAL** after guided calibration. LOCAL is gravity-aligned, so placing the Quest on top of a monitor with some physical pitch/roll no longer tilts the user's controller coordinate frame.
+
+If the OpenXR runtime reports that LOCAL space is being recentered, DeskXR invalidates the guided calibration and falls back until a new solve is captured.
+
+The Quest UI exposes virtual head height, Quest-to-head distance, Quest vertical offset, and a facing-user preset for the manual fallback. The preset applies a 180-degree yaw before translating the controller pose into the virtual head frame.
 
 ## Calibration
 
@@ -97,18 +102,11 @@ The guided solve can be requested from the Android UI or entirely from the contr
 
 ## OpenXR lifecycle experiment
 
-The major hardware unknown is what Horizon OS does when the Quest is physically not worn.
+Quest normally sleeps when its proximity sensor reports that it is not being worn, which pauses the OpenXR runtime.
 
-DeskXR needs:
+DeskXR includes a development helper using Meta's documented ADB proximity override. The Windows launcher can enable that override and remotely launch the Quest app with PC host/port extras, allowing a mostly headset-free startup.
 
-- the app to remain foreground/active;
-- the OpenXR session to reach READY/FOCUSED;
-- Touch tracking to remain active;
-- the device not to sleep because of the proximity sensor.
-
-The APK reports OpenXR session state and outgoing packet rate to make this easy to verify.
-
-If the session is suspended while unworn, lifecycle handling becomes the next blocker before tracking quality.
+The APK reports OpenXR session state, outgoing packet rate, acknowledgement state, RTT, and haptic count so the remaining lifecycle behavior can be validated on real hardware.
 
 ## Desktop display modes
 
@@ -172,8 +170,8 @@ Because the PC replies to the source endpoint of the latest valid `DXR1` packet,
 
 ## Next milestones
 
-1. install the APK on Quest 3S and test unworn session behavior;
-2. validate and tune the guided two-controller calibration on Quest 3S;
-3. validate bidirectional haptics on real Quest Touch hardware;
-4. validate mouse head rotation in VRChat and decide whether to expose it through a launcher instead of global hotkeys;
-5. turn the current self-installing Windows artifact into a small launcher/config UI.
+1. validate Quest 3S unworn tracking with the documented ADB override;
+2. validate and tune the LOCAL-space guided calibration on real hardware;
+3. validate bidirectional haptics and capacitive gestures in VRChat;
+4. validate the monocular desktop compositor layout in SteamVR/VRChat;
+5. validate mouse head rotation in VRChat and refine desktop controls based on real use.
