@@ -97,6 +97,17 @@ public:
         cameraDistance_ = cameraDistance;
         cameraYOffset_ = cameraYOffset;
         facingUser_ = facingUser;
+
+        transformYawRad_ = facingUser_
+                ? 3.14159265358979323846f
+                : 0.0f;
+        transformOffset_[0] = 0.0f;
+        transformOffset_[1] = headHeight_ + cameraYOffset_;
+        transformOffset_[2] = -cameraDistance_;
+        quickCalibrated_ = false;
+        calibrationPending_ = false;
+        calibrationRequested_ = false;
+
         stopRequested_ = false;
         running_ = true;
         worker_ = std::thread([this] { ThreadMain(); });
@@ -118,6 +129,15 @@ public:
         if (Status().rfind("Error:", 0) != 0) {
             SetStatus("Idle");
         }
+    }
+
+    bool RequestQuickCalibration() {
+        if (!running_.load() || !sessionRunning_) {
+            return false;
+        }
+
+        calibrationRequested_.store(true);
+        return true;
     }
 
     bool IsRunning() const {
@@ -558,6 +578,69 @@ private:
                state.currentState;
     }
 
+    bool QuickCalibrateFromHands(XrTime time) {
+        std::array<XrSpaceLocation, 2> locations{
+                XrSpaceLocation{XR_TYPE_SPACE_LOCATION},
+                XrSpaceLocation{XR_TYPE_SPACE_LOCATION}};
+
+        const XrSpaceLocationFlags needed =
+                XR_SPACE_LOCATION_POSITION_VALID_BIT |
+                XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+
+        for (std::size_t hand = 0; hand < locations.size(); ++hand) {
+            const XrResult result =
+                    xrLocateSpace(handSpaces_[hand], viewSpace_, time, &locations[hand]);
+            if (XR_FAILED(result) ||
+                (locations[hand].locationFlags & needed) != needed) {
+                SetStatus("Quick calibration failed: both controller poses must be tracked.");
+                return false;
+            }
+        }
+
+        const auto& left = locations[0].pose.position;
+        const auto& right = locations[1].pose.position;
+
+        const float dx = right.x - left.x;
+        const float dz = right.z - left.z;
+        const float horizontalSpan = std::sqrt(dx * dx + dz * dz);
+
+        if (horizontalSpan < 0.18f) {
+            SetStatus("Quick calibration failed: hold controllers farther apart.");
+            return false;
+        }
+
+        // When the controllers are held shoulder-width apart, the vector from
+        // left to right approximates the user's +X axis. Rotating that vector
+        // onto +X gives the yaw from Quest VIEW space into DeskXR user space.
+        transformYawRad_ = std::atan2(dz, dx);
+
+        const float midX = (left.x + right.x) * 0.5f;
+        const float midY = (left.y + right.y) * 0.5f;
+        const float midZ = (left.z + right.z) * 0.5f;
+
+        const float cosYaw = std::cos(transformYawRad_);
+        const float sinYaw = std::sin(transformYawRad_);
+        const float rotatedMidX = cosYaw * midX + sinYaw * midZ;
+        const float rotatedMidZ = -sinYaw * midX + cosYaw * midZ;
+
+        // Calibration pose: controllers shoulder-width apart, held in front
+        // of the upper chest. This makes the midpoint a predictable anchor.
+        constexpr float kChestDropFromHeadMeters = 0.30f;
+        constexpr float kHandsForwardFromHeadMeters = 0.35f;
+
+        const float targetX = 0.0f;
+        const float targetY = headHeight_ - kChestDropFromHeadMeters;
+        const float targetZ = -kHandsForwardFromHeadMeters;
+
+        transformOffset_[0] = targetX - rotatedMidX;
+        transformOffset_[1] = targetY - midY;
+        transformOffset_[2] = targetZ - rotatedMidZ;
+
+        quickCalibrated_ = true;
+        SetStatus("Quick calibration captured.");
+        return true;
+    }
+
     void FillHand(std::size_t index, XrTime time, protocol::HandV1& out) {
         XrSpaceLocation location{XR_TYPE_SPACE_LOCATION};
         const XrResult locateResult = xrLocateSpace(handSpaces_[index], viewSpace_, time, &location);
@@ -571,28 +654,26 @@ private:
                 (location.locationFlags & needed) == needed;
 
         if (poseValid) {
-            const float yaw = facingUser_ ? 3.14159265358979323846f : 0.0f;
-            const float cosYaw = std::cos(yaw);
-            const float sinYaw = std::sin(yaw);
+            const float cosYaw = std::cos(transformYawRad_);
+            const float sinYaw = std::sin(transformYawRad_);
 
             const float sourceX = location.pose.position.x;
             const float sourceY = location.pose.position.y;
             const float sourceZ = location.pose.position.z;
 
-            // Quest VIEW space is centered on the physical headset. Map that
-            // camera frame into a virtual user-head frame. A monitor-mounted
-            // Quest normally faces the user, so its horizontal axes need a
-            // 180-degree yaw before adding the camera-to-head translation.
-            out.position[0] = cosYaw * sourceX + sinYaw * sourceZ;
-            out.position[1] = headHeight_ + cameraYOffset_ + sourceY;
-            out.position[2] = -cameraDistance_ - sinYaw * sourceX + cosYaw * sourceZ;
+            out.position[0] =
+                    transformOffset_[0] + cosYaw * sourceX + sinYaw * sourceZ;
+            out.position[1] =
+                    transformOffset_[1] + sourceY;
+            out.position[2] =
+                    transformOffset_[2] - sinYaw * sourceX + cosYaw * sourceZ;
 
             const float qx = location.pose.orientation.x;
             const float qy = location.pose.orientation.y;
             const float qz = location.pose.orientation.z;
             const float qw = location.pose.orientation.w;
 
-            const float halfYaw = yaw * 0.5f;
+            const float halfYaw = transformYawRad_ * 0.5f;
             const float yawY = std::sin(halfYaw);
             const float yawW = std::cos(halfYaw);
 
@@ -745,6 +826,21 @@ private:
 
         const XrResult syncResult = xrSyncActions(session_, &syncInfo);
         if (XR_SUCCEEDED(syncResult)) {
+            if (calibrationRequested_.exchange(false)) {
+                calibrationPending_ = true;
+                quickCalibrated_ = false;
+                calibrationDue_ =
+                        std::chrono::steady_clock::now() + std::chrono::seconds(3);
+                SetStatus(
+                        "Quick calibration in 3s: hold controllers shoulder-width apart at upper chest.");
+            }
+
+            if (calibrationPending_ &&
+                std::chrono::steady_clock::now() >= calibrationDue_) {
+                calibrationPending_ = false;
+                QuickCalibrateFromHands(frameState.predictedDisplayTime);
+            }
+
             FillHand(0, frameState.predictedDisplayTime, packet.left);
             FillHand(1, frameState.predictedDisplayTime, packet.right);
         } else {
@@ -816,12 +912,25 @@ private:
                         lastAckReceived_.time_since_epoch().count() != 0 &&
                         (now - lastAckReceived_) < std::chrono::seconds(2);
 
+                std::string calibrationText =
+                        quickCalibrated_ ? "quick" : "manual";
+
+                if (calibrationPending_) {
+                    const auto remaining =
+                            std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    calibrationDue_ - now)
+                                    .count();
+                    const auto seconds =
+                            std::max<std::int64_t>(0, (remaining + 999) / 1000);
+                    calibrationText = "pending-" + std::to_string(seconds) + "s";
+                }
+
                 SetStatus(
                         std::string("Streaming to ") + host_ + ":" + std::to_string(port_) +
                         " | OpenXR " + SessionStateName(sessionState_) +
                         " | " + std::to_string(fps) + " packets/s" +
                         " | PC " + (pcLinked ? "linked" : "no-ack") +
-                        " | ack " + std::to_string(lastAckSequence_) +
+                        " | calib " + calibrationText +
                         " | haptics " + std::to_string(hapticCount_.load()));
             }
         }
@@ -896,6 +1005,13 @@ private:
     float cameraDistance_ = 0.70f;
     float cameraYOffset_ = -0.30f;
     bool facingUser_ = true;
+
+    float transformYawRad_ = 0.0f;
+    std::array<float, 3> transformOffset_{0.0f, kVirtualHeadHeight, -0.70f};
+    bool quickCalibrated_ = false;
+    bool calibrationPending_ = false;
+    std::chrono::steady_clock::time_point calibrationDue_{};
+    std::atomic_bool calibrationRequested_{false};
 
     mutable std::mutex statusMutex_;
     std::string status_ = "Idle";
@@ -980,6 +1096,11 @@ Java_org_sakus_deskxr_MainActivity_nativeStart(
 extern "C" JNIEXPORT void JNICALL
 Java_org_sakus_deskxr_MainActivity_nativeStop(JNIEnv* env, jclass) {
     gBridge.Stop(env);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_sakus_deskxr_MainActivity_nativeRequestQuickCalibration(JNIEnv*, jclass) {
+    return gBridge.RequestQuickCalibration() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
