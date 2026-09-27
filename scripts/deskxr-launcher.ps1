@@ -51,7 +51,7 @@ function Invoke-Helper {
     }
 
     if ($Admin) {
-        $params.Verb = "RunAs"
+        $params["Verb"] = "RunAs"
     }
 
     Start-Process @params
