@@ -20,6 +20,10 @@ on:
       - ".github/workflows/build-windows.yml"
   workflow_dispatch:
 
+concurrency:
+  group: deskxr-windows-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
