@@ -12,6 +12,11 @@ add_library(deskxr_quest SHARED
     deskxr_quest.cpp
 )
 
+target_include_directories(deskxr_quest
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../../../common"
+)
+
 target_link_libraries(deskxr_quest
     PRIVATE
         OpenXR::openxr_loader
