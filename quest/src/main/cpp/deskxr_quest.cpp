@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -61,10 +62,23 @@ struct PacketV1 {
     HandV1 left;
     HandV1 right;
 };
+
+struct HapticPacketV1 {
+    char magic[4];
+    std::uint16_t version;
+    std::uint16_t size;
+    std::uint32_t sequence;
+    std::uint8_t hand;
+    std::uint8_t reserved[3];
+    float durationSeconds;
+    float frequencyHz;
+    float amplitude;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(HandV1) == 52);
 static_assert(sizeof(PacketV1) == 116);
+static_assert(sizeof(HapticPacketV1) == 28);
 
 void LogI(const char* text) {
     __android_log_print(ANDROID_LOG_INFO, kTag, "%s", text);
@@ -431,7 +445,8 @@ private:
             !CreateAction("primary", "Primary button", XR_ACTION_TYPE_BOOLEAN_INPUT, &primaryAction_, true) ||
             !CreateAction("secondary", "Secondary button", XR_ACTION_TYPE_BOOLEAN_INPUT, &secondaryAction_, true) ||
             !CreateAction("thumb_click", "Thumbstick click", XR_ACTION_TYPE_BOOLEAN_INPUT, &thumbClickAction_, true) ||
-            !CreateAction("menu", "Menu", XR_ACTION_TYPE_BOOLEAN_INPUT, &menuAction_, false)) {
+            !CreateAction("menu", "Menu", XR_ACTION_TYPE_BOOLEAN_INPUT, &menuAction_, false) ||
+            !CreateAction("haptic", "Haptic", XR_ACTION_TYPE_VIBRATION_OUTPUT, &hapticAction_, true)) {
             return false;
         }
 
@@ -463,6 +478,8 @@ private:
         bind(thumbClickAction_, "/user/hand/left/input/thumbstick/click");
         bind(thumbClickAction_, "/user/hand/right/input/thumbstick/click");
         bind(menuAction_, "/user/hand/left/input/menu/click");
+        bind(hapticAction_, "/user/hand/left/output/haptic");
+        bind(hapticAction_, "/user/hand/right/output/haptic");
 
         XrInteractionProfileSuggestedBinding suggested{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
         suggested.interactionProfile = profile;
@@ -641,6 +658,59 @@ private:
         }
     }
 
+    void ProcessHaptics() {
+        while (true) {
+            HapticPacketV1 packet{};
+            sockaddr_in from{};
+            socklen_t fromLength = sizeof(from);
+
+            const ssize_t received = recvfrom(
+                    socket_,
+                    &packet,
+                    sizeof(packet),
+                    MSG_DONTWAIT,
+                    reinterpret_cast<sockaddr*>(&from),
+                    &fromLength);
+
+            if (received < 0) {
+                break;
+            }
+
+            if (received != static_cast<ssize_t>(sizeof(packet))) continue;
+            if (std::memcmp(packet.magic, "DXH1", 4) != 0) continue;
+            if (packet.version != kProtocolVersion) continue;
+            if (packet.size != sizeof(HapticPacketV1)) continue;
+            if (packet.hand > 1) continue;
+
+            XrHapticActionInfo info{XR_TYPE_HAPTIC_ACTION_INFO};
+            info.action = hapticAction_;
+            info.subactionPath = handPaths_[packet.hand];
+
+            XrHapticVibration vibration{XR_TYPE_HAPTIC_VIBRATION};
+            vibration.amplitude = std::clamp(packet.amplitude, 0.0f, 1.0f);
+            vibration.frequency = packet.frequencyHz > 0.0f
+                    ? packet.frequencyHz
+                    : XR_FREQUENCY_UNSPECIFIED;
+
+            if (packet.durationSeconds <= 0.0f) {
+                vibration.duration = XR_MIN_HAPTIC_DURATION;
+            } else {
+                const double nanos = static_cast<double>(packet.durationSeconds) * 1'000'000'000.0;
+                vibration.duration = static_cast<XrDuration>(
+                        std::clamp(nanos, 1.0, 5'000'000'000.0));
+            }
+
+            const XrResult result = xrApplyHapticFeedback(
+                    session_,
+                    &info,
+                    reinterpret_cast<const XrHapticBaseHeader*>(&vibration));
+
+            if (XR_SUCCEEDED(result)) {
+                hapticCount_.fetch_add(1);
+            }
+        }
+    }
+
     bool RunFrame() {
         XrFrameWaitInfo waitInfo{XR_TYPE_FRAME_WAIT_INFO};
         XrFrameState frameState{XR_TYPE_FRAME_STATE};
@@ -682,6 +752,8 @@ private:
                 0,
                 reinterpret_cast<const sockaddr*>(&destination_),
                 sizeof(destination_));
+
+        ProcessHaptics();
 
         XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
         endInfo.displayTime = frameState.predictedDisplayTime;
@@ -736,7 +808,8 @@ private:
                 SetStatus(
                         std::string("Streaming to ") + host_ + ":" + std::to_string(port_) +
                         " | OpenXR " + SessionStateName(sessionState_) +
-                        " | " + std::to_string(fps) + " packets/s");
+                        " | " + std::to_string(fps) + " packets/s" +
+                        " | haptics " + std::to_string(hapticCount_.load()));
             }
         }
 
@@ -840,6 +913,7 @@ private:
     XrAction secondaryAction_ = XR_NULL_HANDLE;
     XrAction thumbClickAction_ = XR_NULL_HANDLE;
     XrAction menuAction_ = XR_NULL_HANDLE;
+    XrAction hapticAction_ = XR_NULL_HANDLE;
 
     EGLDisplay eglDisplay_ = EGL_NO_DISPLAY;
     EGLConfig eglConfig_ = nullptr;
@@ -847,6 +921,7 @@ private:
     EGLSurface eglSurface_ = EGL_NO_SURFACE;
 
     std::uint32_t sequence_ = 0;
+    std::atomic_uint64_t hapticCount_{0};
 };
 
 Bridge gBridge;
