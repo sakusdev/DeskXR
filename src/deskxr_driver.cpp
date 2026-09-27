@@ -460,6 +460,7 @@ enum class Input : std::size_t {
     JoystickY,
     JoystickClick,
     JoystickTouch,
+    ThumbrestTouch,
     AClick,
     ATouch,
     BClick,
@@ -513,6 +514,7 @@ public:
         MakeScalar(container, "/input/joystick/y", Input::JoystickY, vr::VRScalarUnits_NormalizedTwoSided);
         MakeBoolean(container, "/input/joystick/click", Input::JoystickClick);
         MakeBoolean(container, "/input/joystick/touch", Input::JoystickTouch);
+        MakeBoolean(container, "/input/thumbrest/touch", Input::ThumbrestTouch);
 
         MakeBoolean(container, "/input/a/click", Input::AClick);
         MakeBoolean(container, "/input/a/touch", Input::ATouch);
@@ -588,7 +590,8 @@ public:
 
         UpdateScalar(Input::TriggerValue, std::clamp(hand.trigger, 0.0f, 1.0f));
         UpdateBoolean(Input::TriggerClick, hand.trigger >= 0.75f);
-        UpdateBoolean(Input::TriggerTouch, hand.trigger >= 0.02f);
+        UpdateBoolean(Input::TriggerTouch,
+                      button(protocol::TouchTrigger) || hand.trigger >= 0.02f);
 
         UpdateScalar(Input::GripValue, std::clamp(hand.grip, 0.0f, 1.0f));
         UpdateBoolean(Input::GripClick, hand.grip >= 0.75f);
@@ -597,16 +600,19 @@ public:
         UpdateScalar(Input::JoystickY, std::clamp(hand.joystick[1], -1.0f, 1.0f));
         UpdateBoolean(Input::JoystickClick, button(protocol::ButtonThumbstick));
         UpdateBoolean(Input::JoystickTouch,
-                      std::fabs(hand.joystick[0]) > 0.02f || std::fabs(hand.joystick[1]) > 0.02f);
+                      button(protocol::TouchThumbstick) ||
+                      std::fabs(hand.joystick[0]) > 0.02f ||
+                      std::fabs(hand.joystick[1]) > 0.02f);
+        UpdateBoolean(Input::ThumbrestTouch, button(protocol::TouchThumbrest));
 
         UpdateBoolean(Input::AClick, button(protocol::ButtonA));
-        UpdateBoolean(Input::ATouch, button(protocol::ButtonA));
+        UpdateBoolean(Input::ATouch, button(protocol::TouchA) || button(protocol::ButtonA));
         UpdateBoolean(Input::BClick, button(protocol::ButtonB));
-        UpdateBoolean(Input::BTouch, button(protocol::ButtonB));
+        UpdateBoolean(Input::BTouch, button(protocol::TouchB) || button(protocol::ButtonB));
         UpdateBoolean(Input::XClick, button(protocol::ButtonX));
-        UpdateBoolean(Input::XTouch, button(protocol::ButtonX));
+        UpdateBoolean(Input::XTouch, button(protocol::TouchX) || button(protocol::ButtonX));
         UpdateBoolean(Input::YClick, button(protocol::ButtonY));
-        UpdateBoolean(Input::YTouch, button(protocol::ButtonY));
+        UpdateBoolean(Input::YTouch, button(protocol::TouchY) || button(protocol::ButtonY));
         UpdateBoolean(Input::MenuClick, button(protocol::ButtonMenu));
     }
 
@@ -662,6 +668,7 @@ private:
         UpdateScalar(Input::JoystickY, 0.0f);
         UpdateBoolean(Input::JoystickClick, false);
         UpdateBoolean(Input::JoystickTouch, false);
+        UpdateBoolean(Input::ThumbrestTouch, false);
         UpdateBoolean(Input::AClick, false);
         UpdateBoolean(Input::ATouch, false);
         UpdateBoolean(Input::BClick, false);
