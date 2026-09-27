@@ -107,6 +107,8 @@ public:
         quickCalibrated_ = false;
         calibrationPending_ = false;
         calibrationRequested_ = false;
+        calibrationChordActive_ = false;
+        calibrationChordLatched_ = false;
         lastRttMs_ = -1.0;
         for (auto& stamp : sentStamps_) {
             stamp.valid = false;
@@ -582,6 +584,54 @@ private:
                state.currentState;
     }
 
+    void PulseCalibrationHaptic() {
+        for (std::size_t hand = 0; hand < handPaths_.size(); ++hand) {
+            XrHapticActionInfo info{XR_TYPE_HAPTIC_ACTION_INFO};
+            info.action = hapticAction_;
+            info.subactionPath = handPaths_[hand];
+
+            XrHapticVibration vibration{XR_TYPE_HAPTIC_VIBRATION};
+            vibration.amplitude = 0.65f;
+            vibration.duration = static_cast<XrDuration>(80'000'000);
+            vibration.frequency = XR_FREQUENCY_UNSPECIFIED;
+
+            xrApplyHapticFeedback(
+                    session_,
+                    &info,
+                    reinterpret_cast<const XrHapticBaseHeader*>(&vibration));
+        }
+    }
+
+    void ProcessCalibrationChord(XrTime time) {
+        const bool chord =
+                FloatState(triggerAction_, handPaths_[0]) >= 0.80f &&
+                FloatState(triggerAction_, handPaths_[1]) >= 0.80f &&
+                BoolState(thumbClickAction_, handPaths_[0]) &&
+                BoolState(thumbClickAction_, handPaths_[1]);
+
+        const auto now = std::chrono::steady_clock::now();
+
+        if (!chord) {
+            calibrationChordActive_ = false;
+            calibrationChordLatched_ = false;
+            return;
+        }
+
+        if (!calibrationChordActive_) {
+            calibrationChordActive_ = true;
+            calibrationChordSince_ = now;
+            return;
+        }
+
+        if (!calibrationChordLatched_ &&
+            (now - calibrationChordSince_) >= std::chrono::milliseconds(1200)) {
+            calibrationChordLatched_ = true;
+            if (QuickCalibrateFromHands(time)) {
+                PulseCalibrationHaptic();
+            }
+        }
+    }
+
     bool QuickCalibrateFromHands(XrTime time) {
         std::array<XrSpaceLocation, 2> locations{
                 XrSpaceLocation{XR_TYPE_SPACE_LOCATION},
@@ -846,6 +896,8 @@ private:
 
         const XrResult syncResult = xrSyncActions(session_, &syncInfo);
         if (XR_SUCCEEDED(syncResult)) {
+            ProcessCalibrationChord(frameState.predictedDisplayTime);
+
             if (calibrationRequested_.exchange(false)) {
                 calibrationPending_ = true;
                 quickCalibrated_ = false;
@@ -1043,6 +1095,9 @@ private:
     bool calibrationPending_ = false;
     std::chrono::steady_clock::time_point calibrationDue_{};
     std::atomic_bool calibrationRequested_{false};
+    bool calibrationChordActive_ = false;
+    bool calibrationChordLatched_ = false;
+    std::chrono::steady_clock::time_point calibrationChordSince_{};
 
     mutable std::mutex statusMutex_;
     std::string status_ = "Idle";
