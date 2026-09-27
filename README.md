@@ -9,7 +9,7 @@ The goal is to keep VRChat in VR mode while you look at a normal PC monitor, use
 The repository now contains both halves of the first working pipeline:
 
 - **Windows / SteamVR driver**
-  - fixed virtual HMD;
+  - virtual HMD with fixed position and optional mouse-driven yaw/pitch;
   - left/right virtual controllers;
   - UDP input for 6DoF pose and controller actions;
   - trigger, grip, thumbstick, A/B/X/Y, menu;
@@ -80,6 +80,17 @@ powershell -ExecutionPolicy Bypass -File scripts/install-driver.ps1 -ConfigureFi
 ~~~
 
 The installer searches Steam libraries for SteamVR, registers the driver with `vrpathreg.exe`, and prints likely LAN IPv4 addresses to enter in the Quest app. Restart SteamVR after installing.
+
+## Desktop head look
+
+DeskXR keeps the virtual HMD position fixed, but its orientation can now be controlled from the desktop:
+
+- **F8** toggles mouse-look capture;
+- **F9** resets virtual head yaw/pitch;
+- while mouse look is active, the cursor is re-centered and mouse movement rotates the virtual HMD;
+- sensitivity and pitch limit are configurable in `driver/resources/settings/default.vrsettings`.
+
+This is optional. If you leave mouse look off, VRChat can still use the controller sticks for locomotion/turning.
 
 ## PC-only smoke test
 
@@ -152,8 +163,8 @@ The PC driver considers controller data stale after one second and reports track
 - hardware test on Quest 3S while unworn;
 - refine the current manual mount calibration into a guided calibration flow;
 - validate haptics on real Quest Touch hardware;
-- optional mouse-driven virtual head yaw/pitch;
-- installer / launcher;
+- validate mouse-look behavior inside VRChat;
+- small launcher/config UI on top of the current self-installer;
 - OSC FBT setup helper.
 
 See `docs/architecture.md` for more detail.
