@@ -168,6 +168,8 @@ This requires an authorized ADB connection to the Quest.
 
 The Quest client locates each controller relative to OpenXR's VIEW reference space and applies a configurable mount transform. The UI lets you set virtual head height, Quest-to-head distance, vertical offset, and whether the Quest cameras face the user. The facing-user preset applies the 180-degree yaw needed for a typical monitor-mounted Quest.
 
+A **Quick calibrate** button is also available after the bridge starts. Press it, then during the 3-second countdown hold both controllers shoulder-width apart in front of your upper chest. DeskXR estimates user yaw from the left-to-right controller vector and solves the translation that places the controller midpoint at a chest-level reference point. This replaces the manual transform for the current session.
+
 ## Important hardware experiment
 
 By default, Quest sleeps when the proximity sensor says the headset is not being worn, which pauses the OpenXR runtime. DeskXR now includes the ADB-based unworn helper above so this can be explicitly overridden during testing.
@@ -191,7 +193,7 @@ The PC driver considers controller data stale after one second and reports track
 ## Next milestones
 
 - hardware test on Quest 3S with the documented unworn ADB override enabled;
-- refine the current manual mount calibration into a guided calibration flow;
+- validate and tune the new guided two-controller calibration on real hardware;
 - validate haptics on real Quest Touch hardware;
 - validate mouse-look behavior inside VRChat;
 - small launcher/config UI on top of the current self-installer;
