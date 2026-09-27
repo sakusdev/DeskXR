@@ -11,13 +11,6 @@ on:
       - "quest/**"
       - "common/**"
       - ".github/workflows/build-quest.yml"
-  pull_request:
-    paths:
-      - "build.gradle"
-      - "settings.gradle"
-      - "quest/**"
-      - "common/**"
-      - ".github/workflows/build-quest.yml"
   workflow_dispatch:
 
 concurrency:
