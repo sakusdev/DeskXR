@@ -103,17 +103,42 @@ bool ValidateAndNormalizePacket(protocol::PacketV1& packet) {
            ValidateAndNormalizeHand(packet.right);
 }
 
+struct HandKinematics {
+    std::array<double, 3> linear{};
+    std::array<double, 3> angular{};
+};
+
 struct Snapshot {
     protocol::PacketV1 packet{};
+    std::array<HandKinematics, 2> kinematics{};
     bool fresh = false;
 };
 
 class SharedState {
 public:
     void Store(const protocol::PacketV1& packet) {
+        const auto now = std::chrono::steady_clock::now();
+
         std::scoped_lock lock(mutex_);
+
+        if (hasPacket_) {
+            const double dt = std::chrono::duration<double>(now - receivedAt_).count();
+
+            // At normal Quest rates this is roughly 11-14 ms. Ignore very
+            // small/large intervals so a restart or hitch cannot create a
+            // huge synthetic velocity that SteamVR would then predict from.
+            if (dt >= 0.002 && dt <= 0.100) {
+                UpdateKinematics(packet_.left, packet.left, dt, kinematics_[0]);
+                UpdateKinematics(packet_.right, packet.right, dt, kinematics_[1]);
+            } else {
+                kinematics_ = {};
+            }
+        } else {
+            kinematics_ = {};
+        }
+
         packet_ = packet;
-        receivedAt_ = std::chrono::steady_clock::now();
+        receivedAt_ = now;
         hasPacket_ = true;
     }
 
@@ -122,13 +147,92 @@ public:
         Snapshot out{};
         if (!hasPacket_) return out;
         out.packet = packet_;
+        out.kinematics = kinematics_;
         out.fresh = (std::chrono::steady_clock::now() - receivedAt_) < 1000ms;
         return out;
     }
 
 private:
+    static double ClampMagnitudeComponent(double value, double limit) {
+        return std::clamp(value, -limit, limit);
+    }
+
+    static void UpdateKinematics(
+            const protocol::HandV1& previous,
+            const protocol::HandV1& current,
+            double dt,
+            HandKinematics& state) {
+        const bool previousValid = (previous.flags & protocol::kPoseValid) != 0;
+        const bool currentValid = (current.flags & protocol::kPoseValid) != 0;
+
+        if (!previousValid || !currentValid) {
+            state = {};
+            return;
+        }
+
+        HandKinematics measured{};
+
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            measured.linear[axis] = ClampMagnitudeComponent(
+                (static_cast<double>(current.position[axis]) -
+                 static_cast<double>(previous.position[axis])) / dt,
+                15.0);
+        }
+
+        // q_delta = q_current * inverse(q_previous). This produces an
+        // angular velocity expressed in the same tracking-space axes as the
+        // position data, which is what OpenVR DriverPose_t expects.
+        const double px = previous.orientation[0];
+        const double py = previous.orientation[1];
+        const double pz = previous.orientation[2];
+        const double pw = previous.orientation[3];
+
+        const double cx = current.orientation[0];
+        const double cy = current.orientation[1];
+        const double cz = current.orientation[2];
+        const double cw = current.orientation[3];
+
+        double dx = -cw * px + cx * pw - cy * pz + cz * py;
+        double dy = -cw * py + cx * pz + cy * pw - cz * px;
+        double dz = -cw * pz - cx * py + cy * px + cz * pw;
+        double dw =  cw * pw + cx * px + cy * py + cz * pz;
+
+        // Quaternions q and -q represent the same orientation. Select the
+        // shortest arc so sign flips do not become 360-degree spikes.
+        if (dw < 0.0) {
+            dx = -dx;
+            dy = -dy;
+            dz = -dz;
+            dw = -dw;
+        }
+
+        dw = std::clamp(dw, -1.0, 1.0);
+        const double sinHalf = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (sinHalf > 1e-6) {
+            const double angle = 2.0 * std::atan2(sinHalf, dw);
+            const double scale = angle / (sinHalf * dt);
+            measured.angular[0] = ClampMagnitudeComponent(dx * scale, 40.0);
+            measured.angular[1] = ClampMagnitudeComponent(dy * scale, 40.0);
+            measured.angular[2] = ClampMagnitudeComponent(dz * scale, 40.0);
+        }
+
+        // A small low-pass filter reduces Wi-Fi/USB timestamp jitter while
+        // still reacting quickly enough for hand motion.
+        constexpr double kAlpha = 0.35;
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            state.linear[axis] =
+                state.linear[axis] * (1.0 - kAlpha) +
+                measured.linear[axis] * kAlpha;
+            state.angular[axis] =
+                state.angular[axis] * (1.0 - kAlpha) +
+                measured.angular[axis] * kAlpha;
+        }
+    }
+
     mutable std::mutex mutex_;
     protocol::PacketV1 packet_{};
+    std::array<HandKinematics, 2> kinematics_{};
     std::chrono::steady_clock::time_point receivedAt_{};
     bool hasPacket_ = false;
 };
@@ -683,6 +787,19 @@ public:
         pose.qRotation.y = hand.orientation[1];
         pose.qRotation.z = hand.orientation[2];
         pose.qRotation.w = hand.orientation[3];
+
+        const std::size_t handIndex =
+            role_ == vr::TrackedControllerRole_LeftHand ? 0u : 1u;
+        const auto& kinematics = snapshot.kinematics[handIndex];
+
+        pose.vecVelocity[0] = kinematics.linear[0];
+        pose.vecVelocity[1] = kinematics.linear[1];
+        pose.vecVelocity[2] = kinematics.linear[2];
+
+        pose.vecAngularVelocity[0] = kinematics.angular[0];
+        pose.vecAngularVelocity[1] = kinematics.angular[1];
+        pose.vecAngularVelocity[2] = kinematics.angular[2];
+
         return pose;
     }
 
