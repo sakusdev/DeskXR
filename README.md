@@ -116,7 +116,7 @@ The GitHub Actions artifact is named:
 6. Press **Start bridge**.
 7. Start VRChat in VR mode.
 
-The Quest client currently locates each controller relative to OpenXR's VIEW reference space and maps that around a fixed virtual head height of 1.65 m. This is deliberately simple for the first hardware test.
+The Quest client locates each controller relative to OpenXR's VIEW reference space and applies a configurable mount transform. The UI lets you set virtual head height, Quest-to-head distance, vertical offset, and whether the Quest cameras face the user. The facing-user preset applies the 180-degree yaw needed for a typical monitor-mounted Quest.
 
 ## Important hardware experiment
 
@@ -143,7 +143,7 @@ The PC driver considers controller data stale after one second and reports track
 ## Next milestones
 
 - hardware test on Quest 3S while unworn;
-- coordinate calibration instead of the fixed 1.65 m offset;
+- refine the current manual mount calibration into a guided calibration flow;
 - haptics PC -> Quest;
 - optional mouse-driven virtual head yaw/pitch;
 - installer / launcher;
