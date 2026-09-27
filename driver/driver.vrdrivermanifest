@@ -1,0 +1,9 @@
+{
+  "alwaysActivate": true,
+  "name": "deskxr",
+  "directory": "",
+  "resourceOnly": false,
+  "hmd_presence": [
+    "*.*"
+  ]
+}
