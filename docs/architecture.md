@@ -59,25 +59,26 @@ The Android UI only configures the PC IPv4 address and UDP port.
 
 For an HMD-less setup, the Quest itself is expected to be placed somewhere near the monitor and used as a tracking camera/base.
 
-Using VIEW space makes the controller packet relative to the current Quest headset pose. The current PoC then places that coordinate system around a fixed virtual head height of 1.65 m.
+Using VIEW space makes the controller packet relative to the current Quest headset pose.
 
-This is intentionally crude. A monitor-mounted Quest facing the user is not actually co-located or co-oriented with the user's head, so a real calibration transform is the next important tracking task.
+The current Quest UI now applies a configurable camera-to-user transform. It exposes virtual head height, Quest-to-head distance, Quest vertical offset, and a facing-user preset. The preset applies a 180-degree yaw before translating the controller pose into the virtual head frame, which is the expected geometry for a Quest mounted on or above a monitor with its cameras looking at the user.
 
-## Calibration plan
+## Calibration
 
-The final mapping should be a rigid transform:
+The mapping is a rigid transform:
 
     P_steamvr = T_quest_to_deskxr * P_quest
 
-and the same rotation component must be applied to controller orientation.
+and the same yaw rotation is applied to controller orientation.
 
-The first practical calibration UI should expose or solve:
+The first manual calibration is implemented. For a typical monitor mount, the default model is:
 
-- Quest/camera position relative to the virtual head;
-- yaw between the Quest cameras and the user's forward direction;
-- virtual head height.
+- virtual head height: 1.65 m;
+- Quest cameras facing the user: enabled;
+- Quest distance in front of the virtual head: 0.70 m;
+- Quest vertical offset from the virtual head: -0.30 m.
 
-A monitor-mounted Quest facing the user will usually need roughly 180 degrees of yaw plus a forward/back translation. Hard-coding only the current 1.65 m Y offset is not sufficient for accurate hands.
+These are only starting values. The later guided calibration flow should estimate the transform from one or more known controller poses instead of asking the user to tune numbers manually.
 
 ## OpenXR lifecycle experiment
 
@@ -134,7 +135,7 @@ The PC driver treats packets older than one second as stale. The controller rema
 ## Next milestones
 
 1. install the APK on Quest 3S and test unworn session behavior;
-2. implement camera-to-user calibration;
+2. replace manual mount calibration with a guided calibration flow;
 3. forward SteamVR haptics back to Quest;
 4. add optional mouse head rotation;
 5. package a one-click Windows installer/launcher.
