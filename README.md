@@ -138,7 +138,8 @@ The Windows driver artifact now includes `DeskXR.ps1`, a small launcher/config t
 - install/update the SteamVR driver;
 - optionally create the UDP 39742 firewall rule;
 - show likely LAN IPv4 addresses for the Quest app;
-- enable/disable Quest unworn mode through ADB;
+- start the Quest bridge directly over ADB with the selected PC LAN address;
+- restore Quest proximity behavior after testing;
 - choose full-size monocular desktop output or stereo side-by-side;
 - set virtual HMD height and mouse-look sensitivity;
 - copy the primary monitor resolution into DeskXR display settings;
@@ -166,15 +167,22 @@ powershell -ExecutionPolicy Bypass -File .\quest-unworn-mode.ps1 -Disable
 
 This requires an authorized ADB connection to the Quest.
 
+For a mostly headset-free startup, the packaged launcher can now do both steps at once. **Start Quest bridge (ADB)** enables the unworn override, launches `org.sakus.deskxr/.MainActivity`, passes the selected PC IPv4 address/UDP port through Android intent extras, and asks the app to start the OpenXR bridge automatically.
+
+The raw helper is:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\quest-start.ps1 -HostAddress 192.168.1.20
+~~~
+
 ## First real Quest test
 
 1. Build/install and register the Windows driver.
 2. Restart SteamVR.
 3. Make sure Windows Firewall allows inbound UDP 39742.
-4. Install and launch the DeskXR APK on Quest.
-5. Enter the PC's LAN IPv4 address, for example 192.168.1.20.
-6. Press **Start bridge**.
-7. Start VRChat in VR mode.
+4. Install the DeskXR APK on Quest.
+5. Either launch it normally and enter the PC LAN IPv4 address, or use **Start Quest bridge (ADB)** from the Windows launcher.
+6. Start VRChat in VR mode.
 
 The Quest client locates each controller relative to OpenXR's VIEW reference space and applies a configurable mount transform. The UI lets you set virtual head height, Quest-to-head distance, vertical offset, and whether the Quest cameras face the user. The facing-user preset applies the 180-degree yaw needed for a typical monitor-mounted Quest.
 
