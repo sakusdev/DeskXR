@@ -17,6 +17,14 @@ enum Button : std::uint32_t {
     ButtonY = 1u << 3,
     ButtonThumbstick = 1u << 4,
     ButtonMenu = 1u << 5,
+
+    TouchA = 1u << 16,
+    TouchB = 1u << 17,
+    TouchX = 1u << 18,
+    TouchY = 1u << 19,
+    TouchTrigger = 1u << 20,
+    TouchThumbstick = 1u << 21,
+    TouchThumbrest = 1u << 22,
 };
 
 enum class Hand : std::uint8_t {
