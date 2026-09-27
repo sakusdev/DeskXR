@@ -74,11 +74,19 @@ struct HapticPacketV1 {
     float frequencyHz;
     float amplitude;
 };
+
+struct AckPacketV1 {
+    char magic[4];
+    std::uint16_t version;
+    std::uint16_t size;
+    std::uint32_t sequence;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(HandV1) == 52);
 static_assert(sizeof(PacketV1) == 116);
 static_assert(sizeof(HapticPacketV1) == 28);
+static_assert(sizeof(AckPacketV1) == 12);
 
 void LogI(const char* text) {
     __android_log_print(ANDROID_LOG_INFO, kTag, "%s", text);
@@ -658,16 +666,16 @@ private:
         }
     }
 
-    void ProcessHaptics() {
+    void ProcessInboundControl() {
         while (true) {
-            HapticPacketV1 packet{};
+            std::array<std::uint8_t, 64> buffer{};
             sockaddr_in from{};
             socklen_t fromLength = sizeof(from);
 
             const ssize_t received = recvfrom(
                     socket_,
-                    &packet,
-                    sizeof(packet),
+                    buffer.data(),
+                    buffer.size(),
                     MSG_DONTWAIT,
                     reinterpret_cast<sockaddr*>(&from),
                     &fromLength);
@@ -676,26 +684,43 @@ private:
                 break;
             }
 
-            if (received != static_cast<ssize_t>(sizeof(packet))) continue;
-            if (std::memcmp(packet.magic, "DXH1", 4) != 0) continue;
-            if (packet.version != kProtocolVersion) continue;
-            if (packet.size != sizeof(HapticPacketV1)) continue;
-            if (packet.hand > 1) continue;
+            if (received == static_cast<ssize_t>(sizeof(AckPacketV1))) {
+                const auto* ack = reinterpret_cast<const AckPacketV1*>(buffer.data());
+                if (std::memcmp(ack->magic, "DXA1", 4) == 0 &&
+                    ack->version == kProtocolVersion &&
+                    ack->size == sizeof(AckPacketV1)) {
+                    lastAckReceived_ = std::chrono::steady_clock::now();
+                    lastAckSequence_ = ack->sequence;
+                    ackCount_.fetch_add(1);
+                    continue;
+                }
+            }
+
+            if (received != static_cast<ssize_t>(sizeof(HapticPacketV1))) {
+                continue;
+            }
+
+            const auto* packet = reinterpret_cast<const HapticPacketV1*>(buffer.data());
+            if (std::memcmp(packet->magic, "DXH1", 4) != 0) continue;
+            if (packet->version != kProtocolVersion) continue;
+            if (packet->size != sizeof(HapticPacketV1)) continue;
+            if (packet->hand > 1) continue;
 
             XrHapticActionInfo info{XR_TYPE_HAPTIC_ACTION_INFO};
             info.action = hapticAction_;
-            info.subactionPath = handPaths_[packet.hand];
+            info.subactionPath = handPaths_[packet->hand];
 
             XrHapticVibration vibration{XR_TYPE_HAPTIC_VIBRATION};
-            vibration.amplitude = std::clamp(packet.amplitude, 0.0f, 1.0f);
-            vibration.frequency = packet.frequencyHz > 0.0f
-                    ? packet.frequencyHz
+            vibration.amplitude = std::clamp(packet->amplitude, 0.0f, 1.0f);
+            vibration.frequency = packet->frequencyHz > 0.0f
+                    ? packet->frequencyHz
                     : XR_FREQUENCY_UNSPECIFIED;
 
-            if (packet.durationSeconds <= 0.0f) {
+            if (packet->durationSeconds <= 0.0f) {
                 vibration.duration = XR_MIN_HAPTIC_DURATION;
             } else {
-                const double nanos = static_cast<double>(packet.durationSeconds) * 1'000'000'000.0;
+                const double nanos =
+                        static_cast<double>(packet->durationSeconds) * 1'000'000'000.0;
                 vibration.duration = static_cast<XrDuration>(
                         std::clamp(nanos, 1.0, 5'000'000'000.0));
             }
@@ -753,7 +778,7 @@ private:
                 reinterpret_cast<const sockaddr*>(&destination_),
                 sizeof(destination_));
 
-        ProcessHaptics();
+        ProcessInboundControl();
 
         XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
         endInfo.displayTime = frameState.predictedDisplayTime;
@@ -805,10 +830,16 @@ private:
                 previousCounter = frameCounter;
                 lastStatus = now;
 
+                const bool pcLinked =
+                        lastAckReceived_.time_since_epoch().count() != 0 &&
+                        (now - lastAckReceived_) < std::chrono::seconds(2);
+
                 SetStatus(
                         std::string("Streaming to ") + host_ + ":" + std::to_string(port_) +
                         " | OpenXR " + SessionStateName(sessionState_) +
                         " | " + std::to_string(fps) + " packets/s" +
+                        " | PC " + (pcLinked ? "linked" : "no-ack") +
+                        " | ack " + std::to_string(lastAckSequence_) +
                         " | haptics " + std::to_string(hapticCount_.load()));
             }
         }
@@ -921,6 +952,9 @@ private:
     EGLSurface eglSurface_ = EGL_NO_SURFACE;
 
     std::uint32_t sequence_ = 0;
+    std::chrono::steady_clock::time_point lastAckReceived_{};
+    std::uint32_t lastAckSequence_ = 0;
+    std::atomic_uint64_t ackCount_{0};
     std::atomic_uint64_t hapticCount_{0};
 };
 
