@@ -14,6 +14,7 @@
     "window_width": 1920,
     "window_height": 1080,
     "render_width": 1600,
-    "render_height": 1600
+    "render_height": 1600,
+    "desktop_mono": true
   }
 }
