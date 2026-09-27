@@ -46,20 +46,26 @@ jobs:
           $dll = "build/deskxr/bin/win64/driver_deskxr.dll"
           $manifest = "build/deskxr/driver.vrdrivermanifest"
           $installer = "build/deskxr/install.ps1"
+          $launcher = "build/deskxr/DeskXR.ps1"
+          $unworn = "build/deskxr/quest-unworn-mode.ps1"
           if (-not (Test-Path $dll)) { throw "Missing $dll" }
           if (-not (Test-Path $manifest)) { throw "Missing $manifest" }
           if (-not (Test-Path $installer)) { throw "Missing $installer" }
+          if (-not (Test-Path $launcher)) { throw "Missing $launcher" }
+          if (-not (Test-Path $unworn)) { throw "Missing $unworn" }
 
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path $installer),
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            throw "PowerShell installer syntax check failed"
+          foreach ($script in @($installer, $launcher, $unworn)) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell syntax check failed: $script"
+            }
           }
 
       - name: Upload driver
