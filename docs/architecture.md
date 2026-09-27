@@ -75,14 +75,23 @@ The mapping is a rigid transform:
 
 and the same yaw rotation is applied to controller orientation.
 
-The first manual calibration is implemented. For a typical monitor mount, the default model is:
+The manual mount transform remains as the startup fallback. For a typical monitor mount, the default model is:
 
 - virtual head height: 1.65 m;
 - Quest cameras facing the user: enabled;
 - Quest distance in front of the virtual head: 0.70 m;
 - Quest vertical offset from the virtual head: -0.30 m.
 
-These are only starting values. The later guided calibration flow should estimate the transform from one or more known controller poses instead of asking the user to tune numbers manually.
+A guided runtime calibration is now implemented. The user starts a three-second countdown and then holds the controllers shoulder-width apart in front of the upper chest.
+
+DeskXR computes:
+
+1. the horizontal left-to-right controller vector;
+2. a yaw that rotates that vector onto user-space +X;
+3. the midpoint of the two controllers;
+4. a translation that maps that midpoint to a chest-level anchor about 0.30 m below and 0.35 m forward of the virtual head.
+
+This provides a full yaw + XYZ translation transform without requiring the user to measure the Quest mount. The chest anchor is still an anthropometric approximation, so real-hardware validation and optional fine adjustment remain useful.
 
 ## OpenXR lifecycle experiment
 
@@ -151,7 +160,7 @@ Because the PC replies to the source endpoint of the latest valid `DXR1` packet,
 ## Next milestones
 
 1. install the APK on Quest 3S and test unworn session behavior;
-2. replace manual mount calibration with a guided calibration flow;
+2. validate and tune the guided two-controller calibration on Quest 3S;
 3. validate bidirectional haptics on real Quest Touch hardware;
 4. validate mouse head rotation in VRChat and decide whether to expose it through a launcher instead of global hotkeys;
 5. turn the current self-installing Windows artifact into a small launcher/config UI.
