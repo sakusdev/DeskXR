@@ -531,6 +531,18 @@ private:
                 return false;
             }
 
+            if (event.type == XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING) {
+                const auto* changed =
+                        reinterpret_cast<const XrEventDataReferenceSpaceChangePending*>(&event);
+
+                if (changed->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
+                    quickCalibrated_ = false;
+                    calibrationPending_ = false;
+                    calibrationRequested_.store(false);
+                    SetStatus("OpenXR recenter detected: quick calibration is required again.");
+                }
+            }
+
             if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
                 const auto* changed = reinterpret_cast<const XrEventDataSessionStateChanged*>(&event);
                 sessionState_ = changed->state;
