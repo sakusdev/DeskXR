@@ -41,14 +41,16 @@ jobs:
           $launcher = "build/deskxr/DeskXR.ps1"
           $unworn = "build/deskxr/quest-unworn-mode.ps1"
           $questStart = "build/deskxr/quest-start.ps1"
+          $questInstall = "build/deskxr/quest-install.ps1"
           if (-not (Test-Path $dll)) { throw "Missing $dll" }
           if (-not (Test-Path $manifest)) { throw "Missing $manifest" }
           if (-not (Test-Path $installer)) { throw "Missing $installer" }
           if (-not (Test-Path $launcher)) { throw "Missing $launcher" }
           if (-not (Test-Path $unworn)) { throw "Missing $unworn" }
           if (-not (Test-Path $questStart)) { throw "Missing $questStart" }
+          if (-not (Test-Path $questInstall)) { throw "Missing $questInstall" }
 
-          foreach ($script in @($installer, $launcher, $unworn, $questStart)) {
+          foreach ($script in @($installer, $launcher, $unworn, $questStart, $questInstall)) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
