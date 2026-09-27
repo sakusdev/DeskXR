@@ -207,6 +207,22 @@ private:
             }
 
             state_.Store(packet);
+
+            if ((packet.sequence & 0x0Fu) == 0u) {
+                protocol::AckPacketV1 ack{};
+                std::memcpy(ack.magic, protocol::kAckMagic, sizeof(ack.magic));
+                ack.version = protocol::kVersion;
+                ack.size = sizeof(ack);
+                ack.sequence = packet.sequence;
+
+                sendto(
+                    socket_,
+                    reinterpret_cast<const char*>(&ack),
+                    static_cast<int>(sizeof(ack)),
+                    0,
+                    reinterpret_cast<const sockaddr*>(&from),
+                    sizeof(from));
+            }
         }
     }
 
