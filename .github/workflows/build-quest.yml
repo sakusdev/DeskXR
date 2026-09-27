@@ -5,7 +5,17 @@ on:
     branches:
       - main
       - "work/**"
+    paths:
+      - "build.gradle"
+      - "settings.gradle"
+      - "quest/**"
+      - ".github/workflows/build-quest.yml"
   pull_request:
+    paths:
+      - "build.gradle"
+      - "settings.gradle"
+      - "quest/**"
+      - ".github/workflows/build-quest.yml"
   workflow_dispatch:
 
 jobs:
