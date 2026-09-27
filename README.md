@@ -14,7 +14,8 @@ The repository now contains both halves of the first working pipeline:
   - UDP input for 6DoF pose and controller actions;
   - trigger, grip, thumbstick, A/B/X/Y, menu;
   - stale-packet tracking loss;
-  - SteamVR haptic events are received and logged.
+  - SteamVR haptic events are forwarded back to the matching Quest Touch controller;
+  - reverse-link acknowledgements let the Quest app detect whether the PC driver is actually receiving packets.
 - **Quest 3 / Quest 3S client**
   - native Android + OpenXR;
   - Oculus Touch interaction profile;
@@ -66,13 +67,19 @@ The packaged driver is written to:
 
     build/deskxr
 
-Register it with SteamVR:
+It is self-installing: the package includes `install.ps1`. From a built tree you can also use the source script directly:
 
 ~~~powershell
 powershell -ExecutionPolicy Bypass -File scripts/install-driver.ps1
 ~~~
 
-Restart SteamVR after registering the driver.
+To also create the Windows Firewall rule for UDP 39742, run an elevated PowerShell:
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-driver.ps1 -ConfigureFirewall
+~~~
+
+The installer searches Steam libraries for SteamVR, registers the driver with `vrpathreg.exe`, and prints likely LAN IPv4 addresses to enter in the Quest app. Restart SteamVR after installing.
 
 ## PC-only smoke test
 
@@ -124,7 +131,7 @@ The key unknown is still Quest lifecycle behavior when the headset is **not bein
 
 DeskXR needs the OpenXR session and Touch controller tracking to remain active while the Quest is sitting on or above the monitor. If Horizon OS suspends the session because the proximity sensor says the headset is unworn, the next milestone will need a different lifecycle strategy.
 
-The APK reports the current OpenXR session state and packet rate so this can be tested immediately on real hardware.
+The APK reports the current OpenXR session state, packet rate, PC acknowledgement state, and received haptic count so this can be tested immediately on real hardware. `PC linked` means the SteamVR driver is receiving Quest packets and replying over the same UDP socket.
 
 ## UDP packet v1
 
@@ -144,7 +151,7 @@ The PC driver considers controller data stale after one second and reports track
 
 - hardware test on Quest 3S while unworn;
 - refine the current manual mount calibration into a guided calibration flow;
-- haptics PC -> Quest;
+- validate haptics on real Quest Touch hardware;
 - optional mouse-driven virtual head yaw/pitch;
 - installer / launcher;
 - OSC FBT setup helper.
