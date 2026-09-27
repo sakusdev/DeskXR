@@ -34,6 +34,8 @@ The Windows driver currently provides:
 - two tracked controller devices;
 - SteamVR Input components for trigger, grip, thumbstick, buttons and haptics;
 - a UDP receiver on port 39742;
+- reverse haptic packets back to the most recent valid Quest peer;
+- periodic acknowledgement packets so the Quest can verify the PC link;
 - one-second stale packet detection;
 - a simulator for testing without Quest.
 
@@ -51,7 +53,9 @@ It currently:
 6. reads left/right grip poses and controller actions;
 7. locates controller poses relative to `XR_REFERENCE_SPACE_TYPE_VIEW`;
 8. sends DeskXR PacketV1 to the PC;
-9. submits zero composition layers because DeskXR does not stream PC video to Quest.
+9. receives PC acknowledgement and haptic packets on the same UDP socket;
+10. maps SteamVR haptic events to an OpenXR vibration-output action;
+11. submits zero composition layers because DeskXR does not stream PC video to Quest.
 
 The Android UI only configures the PC IPv4 address and UDP port.
 
@@ -116,9 +120,11 @@ Once VRChat is running in VR mode through DeskXR, an existing OSC FBT sender can
 
 This keeps the bridge small and avoids duplicating VRChat's OSC tracker path.
 
-## Packet v1
+## UDP protocol v1
 
-PacketV1 is fixed-size and little-endian. It contains a header and exactly two hands.
+DeskXR keeps tracking and reverse-control packets small, fixed-size, and little-endian.
+
+Tracking `PacketV1` uses magic `DXR1` and contains a header plus exactly two hands.
 
 Each hand contains:
 
@@ -130,12 +136,19 @@ Each hand contains:
 - button bit mask;
 - pose-valid flags.
 
-The PC driver treats packets older than one second as stale. The controller remains connected but reports an invalid pose instead of freezing silently.
+The PC driver treats tracking packets older than one second as stale. The controller remains connected but reports an invalid pose instead of freezing silently.
+
+The reverse path uses:
+
+- `DXA1` acknowledgement packets, sent periodically by the PC with the last tracking sequence number;
+- `DXH1` haptic packets, carrying hand, duration, frequency, and amplitude.
+
+Because the PC replies to the source endpoint of the latest valid `DXR1` packet, the Quest does not need a separate listening-port setting.
 
 ## Next milestones
 
 1. install the APK on Quest 3S and test unworn session behavior;
 2. replace manual mount calibration with a guided calibration flow;
-3. forward SteamVR haptics back to Quest;
+3. validate bidirectional haptics on real Quest Touch hardware;
 4. add optional mouse head rotation;
-5. package a one-click Windows installer/launcher.
+5. turn the current self-installing Windows artifact into a small launcher/config UI.
