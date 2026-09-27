@@ -170,11 +170,13 @@ The Quest client locates each controller relative to OpenXR's VIEW reference spa
 
 A **Quick calibrate** button is also available after the bridge starts. Press it, then during the 3-second countdown hold both controllers shoulder-width apart in front of your upper chest. DeskXR estimates user yaw from the left-to-right controller vector and solves the translation that places the controller midpoint at a chest-level reference point. This replaces the manual transform for the current session.
 
+You can also calibrate without looking at the Quest UI: hold the controllers in that same pose, squeeze both triggers past ~80%, click both thumbsticks, and keep the chord held for about 1.2 seconds. Both controllers pulse when calibration succeeds.
+
 ## Important hardware experiment
 
 By default, Quest sleeps when the proximity sensor says the headset is not being worn, which pauses the OpenXR runtime. DeskXR now includes the ADB-based unworn helper above so this can be explicitly overridden during testing.
 
-The APK reports the current OpenXR session state, packet rate, PC acknowledgement state, and received haptic count. `PC linked` means the SteamVR driver is receiving Quest packets and replying over the same UDP socket.
+The APK reports the current OpenXR session state, packet rate, PC acknowledgement state, round-trip time, and received haptic count. `PC linked` means the SteamVR driver is receiving Quest packets and replying over the same UDP socket.
 
 ## UDP packet v1
 
