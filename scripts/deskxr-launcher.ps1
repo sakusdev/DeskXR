@@ -269,7 +269,7 @@ $firewall = New-DeskButton "Install + allow UDP 39742" 328 430
 $questStart = New-DeskButton "Start Quest bridge (ADB)" 28 486
 $restore = New-DeskButton "Restore Quest proximity sensor" 328 486
 $steamvr = New-DeskButton "Start SteamVR" 28 542
-$openRepo = New-DeskButton "Open DeskXR GitHub" 328 542
+$installQuest = New-DeskButton "Install Quest APK..." 328 542
 
 $mouseInfo = New-Object System.Windows.Forms.Label
 $mouseInfo.Text = "Desktop head look: F8 = toggle mouse look, F9 = reset orientation"
@@ -397,8 +397,23 @@ $steamvr.Add_Click({
     Start-Process "steam://rungameid/250820"
 })
 
-$openRepo.Add_Click({
-    Start-Process "https://github.com/sakusdev/DeskXR"
+$installQuest.Add_Click({
+    try {
+        $dialog = New-Object System.Windows.Forms.OpenFileDialog
+        $dialog.Title = "Select DeskXR Quest APK"
+        $dialog.Filter = "Android APK (*.apk)|*.apk|All files (*.*)|*.*"
+        $dialog.CheckFileExists = $true
+
+        if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
+            return
+        }
+
+        $script = Get-HelperPath "quest-install.ps1" "quest-install.ps1"
+        Invoke-Helper $script @("-ApkPath", ('"{0}"' -f $dialog.FileName))
+        $status.Text = "Quest APK install command completed."
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "DeskXR") | Out-Null
+    }
 })
 
 [void]$form.ShowDialog()
