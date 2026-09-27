@@ -6,6 +6,7 @@ namespace deskxr::protocol {
 
 inline constexpr char kTrackingMagic[4] = {'D', 'X', 'R', '1'};
 inline constexpr char kHapticMagic[4] = {'D', 'X', 'H', '1'};
+inline constexpr char kAckMagic[4] = {'D', 'X', 'A', '1'};
 inline constexpr std::uint16_t kVersion = 1;
 inline constexpr std::uint16_t kPoseValid = 1u << 0;
 
@@ -56,10 +57,18 @@ struct HapticPacketV1 {
     float amplitude;
 };
 
+struct AckPacketV1 {
+    char magic[4];
+    std::uint16_t version;
+    std::uint16_t size;
+    std::uint32_t sequence;
+};
+
 #pragma pack(pop)
 
 static_assert(sizeof(HandV1) == 52);
 static_assert(sizeof(PacketV1) == 116);
 static_assert(sizeof(HapticPacketV1) == 28);
+static_assert(sizeof(AckPacketV1) == 12);
 
 } // namespace deskxr::protocol
