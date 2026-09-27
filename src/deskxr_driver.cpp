@@ -50,6 +50,12 @@ std::int32_t ReadInt(const char* section, const char* key, std::int32_t fallback
     return err == vr::VRSettingsError_None ? value : fallback;
 }
 
+bool ReadBool(const char* section, const char* key, bool fallback) {
+    vr::EVRSettingsError err = vr::VRSettingsError_None;
+    const bool value = vr::VRSettings()->GetBool(section, key, &err);
+    return err == vr::VRSettingsError_None ? value : fallback;
+}
+
 bool ValidateAndNormalizeHand(protocol::HandV1& hand) {
     const auto finite = [](float value) { return std::isfinite(value); };
 
@@ -336,6 +342,7 @@ struct DisplayConfig {
     std::uint32_t windowHeight = 1080;
     std::uint32_t renderWidth = 1600;
     std::uint32_t renderHeight = 1600;
+    bool desktopMono = true;
 };
 
 class VirtualDisplay final : public vr::IVRDisplayComponent {
@@ -353,8 +360,19 @@ public:
     void GetEyeOutputViewport(vr::EVREye eye, std::uint32_t* x, std::uint32_t* y,
                               std::uint32_t* width, std::uint32_t* height) override {
         *y = 0;
-        *width = config_.windowWidth / 2;
         *height = config_.windowHeight;
+
+        if (config_.desktopMono) {
+            // DeskXR is intentionally viewed on a normal monitor. Mapping
+            // both eyes to the same desktop viewport leaves a full-size
+            // monocular compositor view instead of a squeezed side-by-side
+            // HMD image. Disable desktop_mono for conventional stereo SBS.
+            *x = 0;
+            *width = config_.windowWidth;
+            return;
+        }
+
+        *width = config_.windowWidth / 2;
         *x = eye == vr::Eye_Left ? 0 : config_.windowWidth / 2;
     }
 
@@ -398,7 +416,13 @@ public:
         config.windowHeight = static_cast<std::uint32_t>(std::max(2, ReadInt(kDisplaySection, "window_height", 1080)));
         config.renderWidth = static_cast<std::uint32_t>(std::max(2, ReadInt(kDisplaySection, "render_width", 1600)));
         config.renderHeight = static_cast<std::uint32_t>(std::max(2, ReadInt(kDisplaySection, "render_height", 1600)));
+        config.desktopMono = ReadBool(kDisplaySection, "desktop_mono", true);
         display_ = std::make_unique<VirtualDisplay>(config);
+
+        Log("[DeskXR] desktop display %ux%u mode=%s",
+            config.windowWidth,
+            config.windowHeight,
+            config.desktopMono ? "mono-overlap" : "stereo-sbs");
 
         position_[0] = ReadFloat(kDriverSection, "hmd_x", 0.0f);
         position_[1] = ReadFloat(kDriverSection, "hmd_y", 1.65f);
