@@ -3,6 +3,7 @@
 #include <openvr_driver.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
 
 #include <algorithm>
 #include <array>
@@ -312,6 +313,17 @@ public:
         position_[0] = ReadFloat(kDriverSection, "hmd_x", 0.0f);
         position_[1] = ReadFloat(kDriverSection, "hmd_y", 1.65f);
         position_[2] = ReadFloat(kDriverSection, "hmd_z", 0.0f);
+
+        const float sensitivityDegrees =
+            ReadFloat(kDriverSection, "mouse_sensitivity_deg_per_pixel", 0.08f);
+        mouseSensitivityRadPerPixel_ =
+            sensitivityDegrees * 3.14159265358979323846f / 180.0f;
+
+        const float pitchLimitDegrees =
+            ReadFloat(kDriverSection, "mouse_pitch_limit_deg", 80.0f);
+        mousePitchLimitRad_ =
+            std::clamp(pitchLimitDegrees, 1.0f, 89.0f) *
+            3.14159265358979323846f / 180.0f;
     }
 
     const char* Serial() const { return kHmdSerial; }
@@ -351,7 +363,18 @@ public:
         vr::DriverPose_t pose{};
         pose.qWorldFromDriverRotation.w = 1.0;
         pose.qDriverFromHeadRotation.w = 1.0;
-        pose.qRotation.w = 1.0;
+        const float halfYaw = yawRad_ * 0.5f;
+        const float halfPitch = pitchRad_ * 0.5f;
+        const float sy = std::sin(halfYaw);
+        const float cy = std::cos(halfYaw);
+        const float sp = std::sin(halfPitch);
+        const float cp = std::cos(halfPitch);
+
+        pose.qRotation.x = cy * sp;
+        pose.qRotation.y = sy * cp;
+        pose.qRotation.z = -sy * sp;
+        pose.qRotation.w = cy * cp;
+
         pose.vecPosition[0] = position_[0];
         pose.vecPosition[1] = position_[1];
         pose.vecPosition[2] = position_[2];
@@ -362,9 +385,55 @@ public:
         return pose;
     }
 
-    void RunFrame() { PushPose(); }
+    void RunFrame() {
+        UpdateMouseLook();
+        PushPose();
+    }
 
 private:
+    void UpdateMouseLook() {
+        if ((GetAsyncKeyState(VK_F8) & 1) != 0) {
+            mouseLookActive_ = !mouseLookActive_;
+            Log("[DeskXR] mouse look %s (F8 toggles, F9 resets)",
+                mouseLookActive_ ? "enabled" : "disabled");
+
+            if (mouseLookActive_) {
+                const int centerX = GetSystemMetrics(SM_CXSCREEN) / 2;
+                const int centerY = GetSystemMetrics(SM_CYSCREEN) / 2;
+                SetCursorPos(centerX, centerY);
+            }
+        }
+
+        if ((GetAsyncKeyState(VK_F9) & 1) != 0) {
+            yawRad_ = 0.0f;
+            pitchRad_ = 0.0f;
+            Log("[DeskXR] mouse-look orientation reset");
+        }
+
+        if (!mouseLookActive_) {
+            return;
+        }
+
+        const int centerX = GetSystemMetrics(SM_CXSCREEN) / 2;
+        const int centerY = GetSystemMetrics(SM_CYSCREEN) / 2;
+
+        POINT point{};
+        if (!GetCursorPos(&point)) {
+            return;
+        }
+
+        const int deltaX = point.x - centerX;
+        const int deltaY = point.y - centerY;
+
+        if (deltaX != 0 || deltaY != 0) {
+            yawRad_ -= static_cast<float>(deltaX) * mouseSensitivityRadPerPixel_;
+            pitchRad_ -= static_cast<float>(deltaY) * mouseSensitivityRadPerPixel_;
+            pitchRad_ = std::clamp(pitchRad_, -mousePitchLimitRad_, mousePitchLimitRad_);
+        }
+
+        SetCursorPos(centerX, centerY);
+    }
+
     void PushPose() {
         if (index_ == vr::k_unTrackedDeviceIndexInvalid) return;
         const auto pose = GetPose();
@@ -373,6 +442,11 @@ private:
 
     std::unique_ptr<VirtualDisplay> display_;
     std::array<float, 3> position_{0.0f, 1.65f, 0.0f};
+    float yawRad_ = 0.0f;
+    float pitchRad_ = 0.0f;
+    float mouseSensitivityRadPerPixel_ = 0.0013962634f;
+    float mousePitchLimitRad_ = 1.3962634f;
+    bool mouseLookActive_ = false;
     vr::TrackedDeviceIndex_t index_ = vr::k_unTrackedDeviceIndexInvalid;
 };
 
