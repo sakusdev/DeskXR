@@ -130,10 +130,46 @@ public:
         }
         if (thread_.joinable()) thread_.join();
 
+        {
+            std::scoped_lock lock(peerMutex_);
+            hasPeer_ = false;
+        }
+
         if (wsaStarted_) {
             WSACleanup();
             wsaStarted_ = false;
         }
+    }
+
+    bool SendHaptic(protocol::Hand hand, float durationSeconds, float frequencyHz, float amplitude) {
+        if (socket_ == INVALID_SOCKET) return false;
+
+        sockaddr_in peer{};
+        {
+            std::scoped_lock lock(peerMutex_);
+            if (!hasPeer_) return false;
+            peer = peer_;
+        }
+
+        protocol::HapticPacketV1 packet{};
+        std::memcpy(packet.magic, protocol::kHapticMagic, sizeof(packet.magic));
+        packet.version = protocol::kVersion;
+        packet.size = sizeof(packet);
+        packet.sequence = hapticSequence_.fetch_add(1);
+        packet.hand = hand;
+        packet.durationSeconds = std::clamp(durationSeconds, 0.0f, 5.0f);
+        packet.frequencyHz = std::max(0.0f, frequencyHz);
+        packet.amplitude = std::clamp(amplitude, 0.0f, 1.0f);
+
+        const int sent = sendto(
+            socket_,
+            reinterpret_cast<const char*>(&packet),
+            static_cast<int>(sizeof(packet)),
+            0,
+            reinterpret_cast<const sockaddr*>(&peer),
+            sizeof(peer));
+
+        return sent == static_cast<int>(sizeof(packet));
     }
 
 private:
@@ -160,9 +196,15 @@ private:
             }
 
             if (received != static_cast<int>(sizeof(packet))) continue;
-            if (std::memcmp(packet.magic, protocol::kMagic, 4) != 0) continue;
+            if (std::memcmp(packet.magic, protocol::kTrackingMagic, 4) != 0) continue;
             if (packet.version != protocol::kVersion) continue;
             if (packet.size != sizeof(protocol::PacketV1)) continue;
+
+            {
+                std::scoped_lock lock(peerMutex_);
+                peer_ = from;
+                hasPeer_ = true;
+            }
 
             state_.Store(packet);
         }
@@ -173,6 +215,11 @@ private:
     std::thread thread_;
     SOCKET socket_ = INVALID_SOCKET;
     bool wsaStarted_ = false;
+
+    mutable std::mutex peerMutex_;
+    sockaddr_in peer_{};
+    bool hasPeer_ = false;
+    std::atomic_uint32_t hapticSequence_{0};
 };
 
 struct DisplayConfig {
@@ -342,8 +389,11 @@ constexpr std::size_t InputIndex(Input input) {
 
 class VirtualController final : public vr::ITrackedDeviceServerDriver {
 public:
-    VirtualController(vr::ETrackedControllerRole role, SharedState& state)
-        : role_(role), state_(state) {}
+    VirtualController(
+            vr::ETrackedControllerRole role,
+            SharedState& state,
+            UdpReceiver& transport)
+        : role_(role), state_(state), transport_(transport) {}
 
     const char* Serial() const {
         return role_ == vr::TrackedControllerRole_LeftHand ? kLeftSerial : kRightSerial;
@@ -474,11 +524,22 @@ public:
         if (event.eventType != vr::VREvent_Input_HapticVibration) return;
         if (event.data.hapticVibration.componentHandle != inputs_[InputIndex(Input::Haptic)]) return;
 
-        Log("[DeskXR] haptic %s duration=%.3f freq=%.1f amp=%.2f",
-            role_ == vr::TrackedControllerRole_LeftHand ? "left" : "right",
+        const auto hand = role_ == vr::TrackedControllerRole_LeftHand
+            ? protocol::Hand::Left
+            : protocol::Hand::Right;
+
+        const bool forwarded = transport_.SendHaptic(
+            hand,
             event.data.hapticVibration.fDurationSeconds,
             event.data.hapticVibration.fFrequency,
             event.data.hapticVibration.fAmplitude);
+
+        Log("[DeskXR] haptic %s duration=%.3f freq=%.1f amp=%.2f %s",
+            role_ == vr::TrackedControllerRole_LeftHand ? "left" : "right",
+            event.data.hapticVibration.fDurationSeconds,
+            event.data.hapticVibration.fFrequency,
+            event.data.hapticVibration.fAmplitude,
+            forwarded ? "forwarded" : "not-forwarded (no Quest peer yet)");
     }
 
 private:
@@ -524,6 +585,7 @@ private:
 
     vr::ETrackedControllerRole role_;
     SharedState& state_;
+    UdpReceiver& transport_;
     vr::TrackedDeviceIndex_t index_ = vr::k_unTrackedDeviceIndexInvalid;
     std::array<vr::VRInputComponentHandle_t, InputIndex(Input::Count)> inputs_{};
 };
@@ -540,8 +602,10 @@ public:
         if (!receiver_->Start(port)) return vr::VRInitError_Driver_Failed;
 
         hmd_ = std::make_unique<VirtualHmd>();
-        left_ = std::make_unique<VirtualController>(vr::TrackedControllerRole_LeftHand, state_);
-        right_ = std::make_unique<VirtualController>(vr::TrackedControllerRole_RightHand, state_);
+        left_ = std::make_unique<VirtualController>(
+            vr::TrackedControllerRole_LeftHand, state_, *receiver_);
+        right_ = std::make_unique<VirtualController>(
+            vr::TrackedControllerRole_RightHand, state_, *receiver_);
 
         if (!vr::VRServerDriverHost()->TrackedDeviceAdded(
                 hmd_->Serial(), vr::TrackedDeviceClass_HMD, hmd_.get())) {
