@@ -89,13 +89,12 @@ DeskXR is intended to use **VRChat's own desktop companion window** as the visib
 
 Do not use SteamVR's **Headset Window / VR View** as the primary DeskXR display. That path is useful for debugging, but it adds the SteamVR mirror/compositor presentation path.
 
-There is an important performance tradeoff: VRChat still renders the normal stereo VR views for SteamVR, while its desktop companion window can add additional GPU work. DeskXR therefore defaults to a lower virtual-HMD workload and exposes three launcher presets:
+There is an important performance tradeoff: VRChat still renders the normal stereo VR views for SteamVR, while its desktop companion window can add additional GPU work. DeskXR therefore defaults to mono rendering with a lower virtual-HMD workload. The launcher lets you choose **16:9** or **16:10** and three quality levels:
 
-- **Performance** — 960x960 per eye @ 60 Hz;
-- **Balanced** — 1200x1200 per eye @ 72 Hz (default);
-- **Quality** — 1600x1600 per eye @ 90 Hz.
+- **16:9** — 960x540 @ 60 Hz, 1280x720 @ 72 Hz (default), or 1600x900 @ 90 Hz;
+- **16:10** — 960x600 @ 60 Hz, 1280x800 @ 72 Hz, or 1600x1000 @ 90 Hz.
 
-These settings affect the virtual HMD render target and reported refresh rate, not the size of the VRChat desktop window. Restart SteamVR after changing the preset.
+Mono mode uses IPD 0 and identical left/right eye viewports. The projection frustum follows the selected render-target aspect, so widescreen output is not stretched. These settings affect the virtual HMD render target and reported refresh rate, not the size of the VRChat desktop window. Restart SteamVR after changing them.
 
 The virtual HMD still exposes a conventional stereo debug display to SteamVR so the compositor can run normally. VRChat remains in VR mode and its own game window is the view you should keep on the monitor.
 
