@@ -457,8 +457,14 @@ public:
     bool IsDisplayRealDisplay() override { return false; }
 
     void GetRecommendedRenderTargetSize(std::uint32_t* width, std::uint32_t* height) override {
-        *width = config_.renderWidth;
-        *height = config_.renderHeight;
+        // The render target must have the same aspect ratio as the output
+        // viewport. The old PoC always returned 1600x1600, then stretched that
+        // square image over a 16:9 desktop viewport, which is exactly the
+        // "everything is horizontally stretched" failure mode.
+        *height = config_.windowHeight;
+        *width = config_.desktopMono
+            ? config_.windowWidth
+            : std::max<std::uint32_t>(1, config_.windowWidth / 2);
     }
 
     void GetEyeOutputViewport(vr::EVREye eye, std::uint32_t* x, std::uint32_t* y,
@@ -481,10 +487,26 @@ public:
     }
 
     void GetProjectionRaw(vr::EVREye, float* left, float* right, float* top, float* bottom) override {
-        *left = -1.0f;
-        *right = 1.0f;
-        *top = -1.0f;
-        *bottom = 1.0f;
+        // OpenVR projection values are tangents of the half-FOV angles.
+        // Keep the vertical half-FOV at the old PoC value (tan=1 => 90 deg
+        // vertical FOV), but scale the horizontal tangent by the actual
+        // viewport aspect ratio. This prevents non-square desktop viewports
+        // from geometrically stretching the rendered world.
+        const float viewportWidth = static_cast<float>(
+            config_.desktopMono
+                ? config_.windowWidth
+                : std::max<std::uint32_t>(1, config_.windowWidth / 2));
+        const float viewportHeight =
+            static_cast<float>(std::max<std::uint32_t>(1, config_.windowHeight));
+        const float aspect = viewportWidth / viewportHeight;
+
+        constexpr float verticalTan = 1.0f;
+        const float horizontalTan = verticalTan * aspect;
+
+        *left = -horizontalTan;
+        *right = horizontalTan;
+        *top = -verticalTan;
+        *bottom = verticalTan;
     }
 
     vr::DistortionCoordinates_t ComputeDistortion(vr::EVREye, float u, float v) override {
@@ -521,12 +543,23 @@ public:
         config.renderWidth = static_cast<std::uint32_t>(std::max(2, ReadInt(kDisplaySection, "render_width", 1600)));
         config.renderHeight = static_cast<std::uint32_t>(std::max(2, ReadInt(kDisplaySection, "render_height", 1600)));
         config.desktopMono = ReadBool(kDisplaySection, "desktop_mono", true);
+        desktopMono_ = config.desktopMono;
         display_ = std::make_unique<VirtualDisplay>(config);
 
-        Log("[DeskXR] desktop display %ux%u mode=%s",
+        const auto eyeWidth = config.desktopMono
+            ? config.windowWidth
+            : std::max<std::uint32_t>(1, config.windowWidth / 2);
+        const float eyeAspect =
+            static_cast<float>(eyeWidth) /
+            static_cast<float>(std::max<std::uint32_t>(1, config.windowHeight));
+
+        Log("[DeskXR] desktop display %ux%u mode=%s eye=%ux%u aspect=%.3f",
             config.windowWidth,
             config.windowHeight,
-            config.desktopMono ? "mono-overlap" : "stereo-sbs");
+            config.desktopMono ? "mono-overlap" : "stereo-sbs",
+            eyeWidth,
+            config.windowHeight,
+            eyeAspect);
 
         position_[0] = ReadFloat(kDriverSection, "hmd_x", 0.0f);
         position_[1] = ReadFloat(kDriverSection, "hmd_y", 1.65f);
@@ -553,7 +586,11 @@ public:
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ModelNumber_String, "DeskXR Virtual HMD");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ManufacturerName_String, "DeskXR");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_SerialNumber_String, kHmdSerial);
-        vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserIpdMeters_Float, 0.064f);
+        // A true desktop-mono camera should not have a stereo eye offset.
+        vr::VRProperties()->SetFloatProperty(
+            container,
+            vr::Prop_UserIpdMeters_Float,
+            desktopMono_ ? 0.0f : 0.064f);
         vr::VRProperties()->SetFloatProperty(container, vr::Prop_DisplayFrequency_Float, 90.0f);
         vr::VRProperties()->SetFloatProperty(container, vr::Prop_SecondsFromVsyncToPhotons_Float, 0.011f);
         vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.0f);
@@ -665,6 +702,7 @@ private:
     float mouseSensitivityRadPerPixel_ = 0.0013962634f;
     float mousePitchLimitRad_ = 1.3962634f;
     bool mouseLookActive_ = false;
+    bool desktopMono_ = true;
     vr::TrackedDeviceIndex_t index_ = vr::k_unTrackedDeviceIndexInvalid;
 };
 
