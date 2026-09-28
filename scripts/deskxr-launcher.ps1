@@ -114,7 +114,10 @@ function Save-DeskSettings {
         [double]$HmdHeight,
         [double]$MouseSensitivity,
         [int]$WindowWidth,
-        [int]$WindowHeight
+        [int]$WindowHeight,
+        [int]$RenderWidth,
+        [int]$RenderHeight,
+        [double]$DisplayFrequency
     )
 
     if (-not $Path) {
@@ -128,8 +131,11 @@ function Save-DeskSettings {
 
     $settings.driver_deskxr.hmd_y = $HmdHeight
     $settings.driver_deskxr.mouse_sensitivity_deg_per_pixel = $MouseSensitivity
+    $settings.driver_deskxr.display_frequency_hz = $DisplayFrequency
     $settings.deskxr_display.window_width = $WindowWidth
     $settings.deskxr_display.window_height = $WindowHeight
+    $settings.deskxr_display.render_width = $RenderWidth
+    $settings.deskxr_display.render_height = $RenderHeight
     $settings.deskxr_display.desktop_mono = $DesktopMono
 
     $json = $settings | ConvertTo-Json -Depth 10
@@ -188,18 +194,27 @@ $status.Size = New-Object System.Drawing.Size(580, 42)
 $form.Controls.Add($status)
 
 $settingsTitle = New-Object System.Windows.Forms.Label
-$settingsTitle.Text = "VR / companion-window settings"
+$settingsTitle.Text = "VR performance / companion-window settings"
 $settingsTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 13)
 $settingsTitle.Location = New-Object System.Drawing.Point(28, 218)
 $settingsTitle.Size = New-Object System.Drawing.Size(250, 28)
 $form.Controls.Add($settingsTitle)
 
-$monoCheck = New-Object System.Windows.Forms.CheckBox
-$monoCheck.Text = "Legacy SteamVR mono output (not recommended)"
-$monoCheck.Location = New-Object System.Drawing.Point(28, 250)
-$monoCheck.Size = New-Object System.Drawing.Size(300, 28)
-$monoCheck.ForeColor = [System.Drawing.Color]::White
-$form.Controls.Add($monoCheck)
+$performanceLabel = New-Object System.Windows.Forms.Label
+$performanceLabel.Text = "Virtual HMD render preset"
+$performanceLabel.Location = New-Object System.Drawing.Point(28, 250)
+$performanceLabel.Size = New-Object System.Drawing.Size(210, 24)
+$form.Controls.Add($performanceLabel)
+
+$performanceBox = New-Object System.Windows.Forms.ComboBox
+$performanceBox.Location = New-Object System.Drawing.Point(240, 247)
+$performanceBox.Size = New-Object System.Drawing.Size(330, 30)
+$performanceBox.DropDownStyle = "DropDownList"
+[void]$performanceBox.Items.Add("Performance — 960x960/eye @ 60 Hz")
+[void]$performanceBox.Items.Add("Balanced — 1200x1200/eye @ 72 Hz")
+[void]$performanceBox.Items.Add("Quality — 1600x1600/eye @ 90 Hz")
+$performanceBox.SelectedIndex = 1
+$form.Controls.Add($performanceBox)
 
 $heightLabel = New-Object System.Windows.Forms.Label
 $heightLabel.Text = "Virtual HMD height (m)"
@@ -262,7 +277,7 @@ function New-DeskButton {
     return $button
 }
 
-$saveSettings = New-DeskButton "Save desktop settings" 28 372
+$saveSettings = New-DeskButton "Save VR settings" 28 372
 $useDisplay = New-DeskButton "Use primary monitor size" 328 372
 $install = New-DeskButton "Install / update SteamVR driver" 28 430
 $firewall = New-DeskButton "Install + allow UDP 39742" 328 430
@@ -286,7 +301,7 @@ $calibrationInfo.Size = New-Object System.Drawing.Size(580, 28)
 $form.Controls.Add($calibrationInfo)
 
 $note = New-Object System.Windows.Forms.Label
-$note.Text = "Use VRChat's own desktop window as the main monitor view. SteamVR Headset Window is only for debugging."
+$note.Text = "VRChat's desktop window adds GPU work on top of stereo VR. Use Performance/Balanced if GPU load is high."
 $note.ForeColor = [System.Drawing.Color]::Gray
 $note.Location = New-Object System.Drawing.Point(28, 666)
 $note.Size = New-Object System.Drawing.Size(580, 44)
@@ -295,7 +310,6 @@ $form.Controls.Add($note)
 $settingsPath = Get-SettingsPath
 $current = Read-DeskSettings $settingsPath
 if ($current) {
-    $monoCheck.Checked = [bool]$current.deskxr_display.desktop_mono
     $heightBox.Text = [Convert]::ToString(
         [double]$current.driver_deskxr.hmd_y,
         [System.Globalization.CultureInfo]::InvariantCulture)
@@ -304,8 +318,19 @@ if ($current) {
         [System.Globalization.CultureInfo]::InvariantCulture)
     $widthBox.Text = [string]$current.deskxr_display.window_width
     $heightPixelsBox.Text = [string]$current.deskxr_display.window_height
+
+    $renderWidth = [int]$current.deskxr_display.render_width
+    $frequency = [double]$current.driver_deskxr.display_frequency_hz
+
+    if ($renderWidth -le 1000 -or $frequency -le 60.5) {
+        $performanceBox.SelectedIndex = 0
+    } elseif ($renderWidth -ge 1500 -or $frequency -ge 85.0) {
+        $performanceBox.SelectedIndex = 2
+    } else {
+        $performanceBox.SelectedIndex = 1
+    }
 } else {
-    $monoCheck.Checked = $true
+    $performanceBox.SelectedIndex = 1
     $heightBox.Text = "1.65"
     $sensitivityBox.Text = "0.08"
     $widthBox.Text = "1920"
@@ -330,8 +355,26 @@ $saveSettings.Add_Click({
             throw "Desktop output size is too small."
         }
 
-        Save-DeskSettings -Path $settingsPath -DesktopMono $monoCheck.Checked -HmdHeight $hmdHeight -MouseSensitivity $mouseSensitivity -WindowWidth $windowWidth -WindowHeight $windowHeight
-        $status.Text = "Settings saved. Restart SteamVR to apply display/driver changes."
+        switch ($performanceBox.SelectedIndex) {
+            0 {
+                $renderWidth = 960
+                $renderHeight = 960
+                $displayFrequency = 60.0
+            }
+            2 {
+                $renderWidth = 1600
+                $renderHeight = 1600
+                $displayFrequency = 90.0
+            }
+            default {
+                $renderWidth = 1200
+                $renderHeight = 1200
+                $displayFrequency = 72.0
+            }
+        }
+
+        Save-DeskSettings -Path $settingsPath -DesktopMono $false -HmdHeight $hmdHeight -MouseSensitivity $mouseSensitivity -WindowWidth $windowWidth -WindowHeight $windowHeight -RenderWidth $renderWidth -RenderHeight $renderHeight -DisplayFrequency $displayFrequency
+        $status.Text = ("Saved: {0}x{1}/eye @ {2} Hz. Restart SteamVR." -f $renderWidth, $renderHeight, $displayFrequency)
     } catch {
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "DeskXR") | Out-Null
     }
