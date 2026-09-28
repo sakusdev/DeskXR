@@ -396,6 +396,52 @@ private:
         return path;
     }
 
+    std::string PathString(XrPath path) {
+        if (path == XR_NULL_PATH || instance_ == XR_NULL_HANDLE) {
+            return "(none)";
+        }
+
+        std::uint32_t required = 0;
+        if (XR_FAILED(xrPathToString(instance_, path, 0, &required, nullptr)) ||
+            required == 0) {
+            return "(unknown)";
+        }
+
+        std::vector<char> buffer(required, '\0');
+        if (XR_FAILED(xrPathToString(
+                    instance_,
+                    path,
+                    static_cast<std::uint32_t>(buffer.size()),
+                    &required,
+                    buffer.data()))) {
+            return "(unknown)";
+        }
+
+        return std::string(buffer.data());
+    }
+
+    void LogCurrentInteractionProfiles() {
+        if (session_ == XR_NULL_HANDLE) {
+            return;
+        }
+
+        for (std::size_t hand = 0; hand < handPaths_.size(); ++hand) {
+            XrInteractionProfileState state{XR_TYPE_INTERACTION_PROFILE_STATE};
+            const XrResult result =
+                    xrGetCurrentInteractionProfile(session_, handPaths_[hand], &state);
+
+            if (XR_SUCCEEDED(result)) {
+                const std::string profile = PathString(state.interactionProfile);
+                __android_log_print(
+                        ANDROID_LOG_INFO,
+                        kTag,
+                        "[DeskXR input] %s interaction profile: %s",
+                        hand == 0 ? "left" : "right",
+                        profile.c_str());
+            }
+        }
+    }
+
     bool CreateAction(
             const char* name,
             const char* localizedName,
@@ -495,8 +541,33 @@ private:
         suggested.suggestedBindings = bindings.data();
 
         if (!Check(xrSuggestInteractionProfileBindings(instance_, &suggested),
-                   "xrSuggestInteractionProfileBindings")) {
+                   "xrSuggestInteractionProfileBindings(oculus_touch)")) {
             return false;
+        }
+
+        // Quest 3/3S ships Touch Plus controllers. OpenXR 1.1 has a dedicated
+        // profile for them. Basic buttons/poses can appear to work through the
+        // older Oculus Touch compatibility profile while capacitive sources
+        // such as thumbrest/touch stay inactive. Suggest the same DeskXR
+        // actions for the native Touch Plus profile as well.
+        const XrPath touchPlusProfile =
+                Path("/interaction_profiles/meta/touch_plus_controller");
+        if (touchPlusProfile != XR_NULL_PATH) {
+            suggested.interactionProfile = touchPlusProfile;
+            const XrResult touchPlusResult =
+                    xrSuggestInteractionProfileBindings(instance_, &suggested);
+
+            if (XR_SUCCEEDED(touchPlusResult)) {
+                LogI("[DeskXR input] Meta Touch Plus bindings enabled.");
+            } else {
+                char resultText[XR_MAX_RESULT_STRING_SIZE] = {};
+                xrResultToString(instance_, touchPlusResult, resultText);
+                __android_log_print(
+                        ANDROID_LOG_WARN,
+                        kTag,
+                        "[DeskXR input] Meta Touch Plus profile unavailable: %s",
+                        resultText);
+            }
         }
 
         XrSessionActionSetsAttachInfo attach{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};
@@ -543,9 +614,17 @@ private:
                 }
             }
 
+            if (event.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED) {
+                LogCurrentInteractionProfiles();
+            }
+
             if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
                 const auto* changed = reinterpret_cast<const XrEventDataSessionStateChanged*>(&event);
                 sessionState_ = changed->state;
+
+                if (sessionState_ == XR_SESSION_STATE_FOCUSED) {
+                    LogCurrentInteractionProfiles();
+                }
 
                 if (sessionState_ == XR_SESSION_STATE_READY && !sessionRunning_) {
                     XrSessionBeginInfo beginInfo{XR_TYPE_SESSION_BEGIN_INFO};
@@ -799,27 +878,40 @@ private:
         if (BoolState(thumbClickAction_, hand)) {
             out.buttons |= protocol::ButtonThumbstick;
         }
-        if (BoolState(triggerTouchAction_, hand)) {
+
+        const bool triggerTouch = BoolState(triggerTouchAction_, hand);
+        const bool thumbstickTouch = BoolState(thumbstickTouchAction_, hand);
+        const bool thumbrestTouch = BoolState(thumbrestTouchAction_, hand);
+        const bool primaryTouch = BoolState(primaryTouchAction_, hand);
+        const bool secondaryTouch = BoolState(secondaryTouchAction_, hand);
+
+        latestTouchState_[index][0] = triggerTouch;
+        latestTouchState_[index][1] = thumbstickTouch;
+        latestTouchState_[index][2] = thumbrestTouch;
+        latestTouchState_[index][3] = primaryTouch;
+        latestTouchState_[index][4] = secondaryTouch;
+
+        if (triggerTouch) {
             out.buttons |= protocol::TouchTrigger;
         }
-        if (BoolState(thumbstickTouchAction_, hand)) {
+        if (thumbstickTouch) {
             out.buttons |= protocol::TouchThumbstick;
         }
-        if (BoolState(thumbrestTouchAction_, hand)) {
+        if (thumbrestTouch) {
             out.buttons |= protocol::TouchThumbrest;
         }
 
         if (index == 0) {
             if (BoolState(primaryAction_, hand)) out.buttons |= protocol::ButtonX;
             if (BoolState(secondaryAction_, hand)) out.buttons |= protocol::ButtonY;
-            if (BoolState(primaryTouchAction_, hand)) out.buttons |= protocol::TouchX;
-            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= protocol::TouchY;
+            if (primaryTouch) out.buttons |= protocol::TouchX;
+            if (secondaryTouch) out.buttons |= protocol::TouchY;
             if (BoolState(menuAction_)) out.buttons |= protocol::ButtonMenu;
         } else {
             if (BoolState(primaryAction_, hand)) out.buttons |= protocol::ButtonA;
             if (BoolState(secondaryAction_, hand)) out.buttons |= protocol::ButtonB;
-            if (BoolState(primaryTouchAction_, hand)) out.buttons |= protocol::TouchA;
-            if (BoolState(secondaryTouchAction_, hand)) out.buttons |= protocol::TouchB;
+            if (primaryTouch) out.buttons |= protocol::TouchA;
+            if (secondaryTouch) out.buttons |= protocol::TouchB;
         }
     }
 
@@ -1085,6 +1177,24 @@ private:
                         latestMappedPosition_[1][1],
                         latestMappedPosition_[1][2]);
                 LogI(poseLine);
+
+                char touchLine[256] = {};
+                std::snprintf(
+                        touchLine,
+                        sizeof(touchLine),
+                        "[DeskXR touch] L trig=%d stick=%d rest=%d X=%d Y=%d | "
+                        "R trig=%d stick=%d rest=%d A=%d B=%d",
+                        latestTouchState_[0][0] ? 1 : 0,
+                        latestTouchState_[0][1] ? 1 : 0,
+                        latestTouchState_[0][2] ? 1 : 0,
+                        latestTouchState_[0][3] ? 1 : 0,
+                        latestTouchState_[0][4] ? 1 : 0,
+                        latestTouchState_[1][0] ? 1 : 0,
+                        latestTouchState_[1][1] ? 1 : 0,
+                        latestTouchState_[1][2] ? 1 : 0,
+                        latestTouchState_[1][3] ? 1 : 0,
+                        latestTouchState_[1][4] ? 1 : 0);
+                LogI(touchLine);
             }
         }
 
@@ -1198,6 +1308,8 @@ private:
     std::array<bool, 2> latestPoseTracked_{false, false};
     std::array<std::array<float, 3>, 2> latestRawPosition_{};
     std::array<std::array<float, 3>, 2> latestMappedPosition_{};
+    // Per hand: trigger, thumbstick, thumbrest, primary, secondary touch.
+    std::array<std::array<bool, 5>, 2> latestTouchState_{};
 
     XrActionSet actionSet_ = XR_NULL_HANDLE;
     XrAction poseAction_ = XR_NULL_HANDLE;
