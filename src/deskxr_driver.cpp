@@ -467,9 +467,34 @@ public:
 
     void GetEyeOutputViewport(vr::EVREye eye, std::uint32_t* x, std::uint32_t* y,
                               std::uint32_t* width, std::uint32_t* height) override {
-        // Standard debug-HMD side-by-side output. This viewport exists only
-        // to satisfy the SteamVR compositor; users should view VRChat's own
-        // desktop companion window instead of SteamVR's Headset Window.
+        if (config_.desktopMono) {
+            // Mono mode: both eyes resolve to the exact same viewport. Keep
+            // the eye render-target aspect ratio and letterbox/pillarbox it
+            // instead of stretching it to the desktop window.
+            const double renderAspect =
+                static_cast<double>(std::max<std::uint32_t>(1, config_.renderWidth)) /
+                static_cast<double>(std::max<std::uint32_t>(1, config_.renderHeight));
+            const double windowAspect =
+                static_cast<double>(std::max<std::uint32_t>(1, config_.windowWidth)) /
+                static_cast<double>(std::max<std::uint32_t>(1, config_.windowHeight));
+
+            if (windowAspect > renderAspect) {
+                *height = config_.windowHeight;
+                *width = static_cast<std::uint32_t>(
+                    std::max(1.0, static_cast<double>(*height) * renderAspect));
+                *x = (config_.windowWidth - *width) / 2;
+                *y = 0;
+            } else {
+                *width = config_.windowWidth;
+                *height = static_cast<std::uint32_t>(
+                    std::max(1.0, static_cast<double>(*width) / renderAspect));
+                *x = 0;
+                *y = (config_.windowHeight - *height) / 2;
+            }
+            return;
+        }
+
+        // Optional stereo debug output.
         *y = 0;
         *height = config_.windowHeight;
         *width = std::max<std::uint32_t>(1, config_.windowWidth / 2);
@@ -523,7 +548,8 @@ public:
         desktopMono_ = config.desktopMono;
         display_ = std::make_unique<VirtualDisplay>(config);
 
-        Log("[DeskXR] compositor debug display %ux%u render=%ux%u; intended desktop view is the VRChat companion window",
+        Log("[DeskXR] virtual HMD mode=%s display=%ux%u render=%ux%u; intended desktop view is the VRChat companion window",
+            config.desktopMono ? "mono" : "stereo",
             config.windowWidth,
             config.windowHeight,
             config.renderWidth,
@@ -559,10 +585,13 @@ public:
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ModelNumber_String, "DeskXR Virtual HMD");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ManufacturerName_String, "DeskXR");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_SerialNumber_String, kHmdSerial);
+        // Mono mode collapses both virtual eyes to the same camera pose.
+        // OpenVR applications still submit Eye_Left/Eye_Right, but there is
+        // no stereo parallax when DeskXR mono mode is enabled.
         vr::VRProperties()->SetFloatProperty(
             container,
             vr::Prop_UserIpdMeters_Float,
-            0.064f);
+            desktopMono_ ? 0.0f : 0.064f);
         vr::VRProperties()->SetFloatProperty(
             container,
             vr::Prop_DisplayFrequency_Float,
@@ -681,7 +710,7 @@ private:
     float mousePitchLimitRad_ = 1.3962634f;
     float displayFrequencyHz_ = 72.0f;
     bool mouseLookActive_ = false;
-    bool desktopMono_ = false; // retained for settings compatibility; no longer used for companion output
+    bool desktopMono_ = true;
     vr::TrackedDeviceIndex_t index_ = vr::k_unTrackedDeviceIndexInvalid;
 };
 
