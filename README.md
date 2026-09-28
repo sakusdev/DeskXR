@@ -162,6 +162,29 @@ Run it with:
 powershell -ExecutionPolicy Bypass -File .\DeskXR.ps1
 ~~~
 
+## Portable ADB
+
+DeskXR's Windows helpers no longer require `adb.exe` to be on `PATH`.
+
+For a portable setup, extract Android platform-tools directly inside the DeskXR folder:
+
+~~~text
+DeskXR-Windows-x64\
+├─ DeskXR.ps1
+├─ adb-common.ps1
+├─ quest-start.ps1
+├─ quest-stop.ps1
+├─ quest-install.ps1
+└─ platform-tools\
+   ├─ adb.exe
+   ├─ AdbWinApi.dll
+   └─ AdbWinUsbApi.dll
+~~~
+
+The helpers search, in order, for a local `adb.exe`, `platform-tools\adb.exe`, a few source-tree layouts, `ANDROID_SDK_ROOT` / `ANDROID_HOME`, the default Android SDK folder, and finally `PATH`.
+
+This means you can unzip Google's platform-tools package into `DeskXR-Windows-x64\platform-tools\` and use the launcher without editing environment variables.
+
 ## Quest unworn mode
 
 Meta documents that the Quest proximity sensor normally puts the headset to sleep as soon as it is removed, which pauses the OpenXR runtime. For DeskXR development/testing, the Windows artifact includes a helper that asks Horizon OS to behave as if the headset is still worn:
