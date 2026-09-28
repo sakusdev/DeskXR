@@ -104,6 +104,23 @@ DeskXR exposes an always-active OpenVR `/proximity` input and marks the virtual 
 
 The proximity signal is refreshed every driver frame and is reasserted if SteamVR calls `EnterStandby()`.
 
+## OVR Advanced Settings compatibility
+
+DeskXR is designed to coexist with **OpenVR Advanced Settings (OVR-AS)**.
+
+The virtual HMD now exposes a stable, non-reserved SteamVR universe ID and reports its actual tracking system as `deskxr`. The virtual controllers still report `oculus_touch` as their controller type so OVR-AS can reuse its existing Touch bindings.
+
+This means OVR-AS features that operate by changing the SteamVR standing/seated playspace transform can move the DeskXR HMD and both virtual controllers together instead of fighting DeskXR's Quest-side calibration.
+
+Recommended OVR-AS setup for DeskXR:
+
+- bind **Space Drag** through SteamVR Input as usual;
+- enable **Ignore Boundary State** for Space Drag if OVR-AS refuses to initialize movement on the virtual HMD;
+- use **Height Toggle**, **Floor Fix**, and playspace offsets normally;
+- perform DeskXR controller calibration first, then use OVR-AS for whole-playspace movement.
+
+DeskXR quick calibration only converts Quest controller tracking into DeskXR driver coordinates. OVR-AS applies its playspace transform later in SteamVR, so ordinary Space Drag/height offsets should not require recalibrating the Quest controllers.
+
 ## Desktop head look
 
 DeskXR keeps the virtual HMD position fixed, but its orientation can now be controlled from the desktop:
