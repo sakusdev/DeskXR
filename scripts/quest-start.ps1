@@ -9,10 +9,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$adb = Get-Command adb -ErrorAction SilentlyContinue
-if (-not $adb) {
-    throw "adb was not found in PATH. Install Android platform-tools first."
-}
+. (Join-Path $PSScriptRoot "adb-common.ps1")
+$adb = Resolve-DeskXRAdb
 
 try {
     $parsedAddress = [System.Net.IPAddress]::Parse($HostAddress)
@@ -27,17 +25,17 @@ if ($Port -lt 1 -or $Port -gt 65535) {
     throw "Port must be between 1 and 65535."
 }
 
-$devices = & $adb.Source devices
+$devices = & $adb devices
 if ($LASTEXITCODE -ne 0) {
     throw "adb devices failed."
 }
 
-$packagePath = & $adb.Source shell pm path org.sakus.deskxr 2>$null
+$packagePath = & $adb shell pm path org.sakus.deskxr 2>$null
 if ($LASTEXITCODE -ne 0 -or -not ($packagePath -match "^package:")) {
     throw "DeskXR is not installed on the connected Quest. Install the latest DeskXR-Quest APK first."
 }
 
-$activityDump = & $adb.Source shell dumpsys package org.sakus.deskxr 2>$null
+$activityDump = & $adb shell dumpsys package org.sakus.deskxr 2>$null
 $hasMainActivity = ($activityDump -join [Environment]::NewLine) -match "org\.sakus\.deskxr\.MainActivity"
 
 if (-not $hasMainActivity) {
@@ -60,7 +58,7 @@ if ($connected.Count -gt 1) {
 
 if (-not $SkipUnwornOverride) {
     Write-Host "Keeping Quest awake while unworn..."
-    & $adb.Source shell am broadcast -a com.oculus.vrpowermanager.prox_close | Out-Null
+    & $adb shell am broadcast -a com.oculus.vrpowermanager.prox_close | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to enable Quest unworn mode."
     }
@@ -68,7 +66,7 @@ if (-not $SkipUnwornOverride) {
 
 Write-Host ("Launching DeskXR Quest bridge -> {0}:{1}" -f $HostAddress, $Port)
 
-$launchOutput = & $adb.Source shell am start -S -n org.sakus.deskxr/.MainActivity --es deskxr_host $HostAddress --ei deskxr_port $Port --ez deskxr_autostart true 2>&1
+$launchOutput = & $adb shell am start -S -n org.sakus.deskxr/.MainActivity --es deskxr_host $HostAddress --ei deskxr_port $Port --ez deskxr_autostart true 2>&1
 
 if ($LASTEXITCODE -ne 0 -or
     ($launchOutput -join [Environment]::NewLine) -match "Error type|does not exist|Unable to resolve") {
