@@ -32,6 +32,18 @@ if ($LASTEXITCODE -ne 0) {
     throw "adb devices failed."
 }
 
+$packagePath = & $adb.Source shell pm path org.sakus.deskxr 2>$null
+if ($LASTEXITCODE -ne 0 -or -not ($packagePath -match "^package:")) {
+    throw "DeskXR is not installed on the connected Quest. Install the latest DeskXR-Quest APK first."
+}
+
+$activityDump = & $adb.Source shell dumpsys package org.sakus.deskxr 2>$null
+$hasMainActivity = ($activityDump -join [Environment]::NewLine) -match "org\.sakus\.deskxr\.MainActivity"
+
+if (-not $hasMainActivity) {
+    throw "The installed DeskXR APK is an old/incompatible build: MainActivity is missing. Uninstall org.sakus.deskxr and install the latest DeskXR-Quest APK from the current PR/Actions build."
+}
+
 $connected = @(
     $devices |
         Select-Object -Skip 1 |
