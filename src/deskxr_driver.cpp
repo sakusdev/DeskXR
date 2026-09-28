@@ -502,13 +502,21 @@ public:
     }
 
     void GetProjectionRaw(vr::EVREye, float* left, float* right, float* top, float* bottom) override {
-        // Conventional symmetric 90-degree per-eye debug projection.
-        // Do not force the VR projection to the desktop monitor aspect ratio;
-        // VRChat's companion window is responsible for presenting the view.
-        *left = -1.0f;
-        *right = 1.0f;
-        *top = -1.0f;
-        *bottom = 1.0f;
+        // Match the camera frustum to the configured render-target aspect.
+        // DeskXR mono commonly uses 16:9 or 16:10 instead of a square HMD
+        // texture. A square 90x90-degree frustum on a widescreen target makes
+        // the companion view look stretched.
+        const float aspect =
+            static_cast<float>(std::max<std::uint32_t>(1, config_.renderWidth)) /
+            static_cast<float>(std::max<std::uint32_t>(1, config_.renderHeight));
+
+        constexpr float verticalTan = 1.0f; // 90-degree vertical FOV
+        const float horizontalTan = verticalTan * aspect;
+
+        *left = -horizontalTan;
+        *right = horizontalTan;
+        *top = -verticalTan;
+        *bottom = verticalTan;
     }
 
     vr::DistortionCoordinates_t ComputeDistortion(vr::EVREye, float u, float v) override {
