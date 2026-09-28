@@ -70,6 +70,11 @@ add_custom_command(TARGET driver_deskxr POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/scripts/adb-common.ps1"
         "${DESKXR_DRIVER_ROOT}/adb-common.ps1"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${DESKXR_DRIVER_ROOT}/platform-tools"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/scripts/platform-tools-README.txt"
+        "${DESKXR_DRIVER_ROOT}/platform-tools/README.txt"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quest-unworn-mode.ps1"
         "${DESKXR_DRIVER_ROOT}/quest-unworn-mode.ps1"
