@@ -612,13 +612,50 @@ public:
         vr::VRProperties()->SetBoolProperty(container, vr::Prop_IsOnDesktop_Bool, false);
         vr::VRProperties()->SetBoolProperty(container, vr::Prop_DisplayDebugMode_Bool, true);
 
+        // DeskXR's HMD is intentionally stationary, so SteamVR cannot use
+        // head motion as an "in use" signal. Expose a virtual proximity
+        // sensor that is always worn instead. OpenVR explicitly uses the
+        // /proximity boolean for HMD standby state.
+        vr::VRProperties()->SetBoolProperty(
+            container,
+            vr::Prop_ContainsProximitySensor_Bool,
+            true);
+        vr::VRProperties()->SetBoolProperty(
+            container,
+            vr::Prop_DeviceCanPowerOff_Bool,
+            false);
+
+        const vr::EVRInputError proximityError =
+            vr::VRDriverInput()->CreateBooleanComponent(
+                container,
+                "/proximity",
+                &proximityHandle_);
+
+        if (proximityError == vr::VRInputError_None) {
+            UpdateProximity();
+        } else {
+            Log("[DeskXR] failed to create HMD /proximity input: %d",
+                static_cast<int>(proximityError));
+        }
+
         PushPose();
-        Log("[DeskXR] virtual HMD activated");
+        Log("[DeskXR] virtual HMD activated (always-worn proximity enabled)");
         return vr::VRInitError_None;
     }
 
-    void Deactivate() override { index_ = vr::k_unTrackedDeviceIndexInvalid; }
-    void EnterStandby() override {}
+    void Deactivate() override {
+        index_ = vr::k_unTrackedDeviceIndexInvalid;
+        proximityHandle_ = vr::k_ulInvalidInputComponentHandle;
+    }
+
+    void EnterStandby() override {
+        // SteamVR may still call this during a power-state transition. DeskXR
+        // has no physical display to power down, so immediately reaffirm the
+        // virtual "headset worn" state.
+        UpdateProximity();
+        PushPose();
+        Log("[DeskXR] standby requested; keeping virtual HMD awake");
+    }
 
     void* GetComponent(const char* nameAndVersion) override {
         if (std::strcmp(nameAndVersion, vr::IVRDisplayComponent_Version) == 0) return display_.get();
@@ -657,10 +694,29 @@ public:
 
     void RunFrame() {
         UpdateMouseLook();
+        UpdateProximity();
         PushPose();
     }
 
 private:
+    void UpdateProximity() {
+        if (proximityHandle_ == vr::k_ulInvalidInputComponentHandle) {
+            return;
+        }
+
+        const vr::EVRInputError error =
+            vr::VRDriverInput()->UpdateBooleanComponent(
+                proximityHandle_,
+                true,
+                0.0);
+
+        if (error != vr::VRInputError_None &&
+            error != vr::VRInputError_InvalidHandle) {
+            Log("[DeskXR] /proximity update failed: %d",
+                static_cast<int>(error));
+        }
+    }
+
     void UpdateMouseLook() {
         if ((GetAsyncKeyState(VK_F8) & 1) != 0) {
             mouseLookActive_ = !mouseLookActive_;
@@ -719,6 +775,7 @@ private:
     float displayFrequencyHz_ = 72.0f;
     bool mouseLookActive_ = false;
     bool desktopMono_ = true;
+    vr::VRInputComponentHandle_t proximityHandle_ = vr::k_ulInvalidInputComponentHandle;
     vr::TrackedDeviceIndex_t index_ = vr::k_unTrackedDeviceIndexInvalid;
 };
 
