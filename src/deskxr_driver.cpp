@@ -457,56 +457,33 @@ public:
     bool IsDisplayRealDisplay() override { return false; }
 
     void GetRecommendedRenderTargetSize(std::uint32_t* width, std::uint32_t* height) override {
-        // The render target must have the same aspect ratio as the output
-        // viewport. The old PoC always returned 1600x1600, then stretched that
-        // square image over a 16:9 desktop viewport, which is exactly the
-        // "everything is horizontally stretched" failure mode.
-        *height = config_.windowHeight;
-        *width = config_.desktopMono
-            ? config_.windowWidth
-            : std::max<std::uint32_t>(1, config_.windowWidth / 2);
+        // DeskXR does not use SteamVR's Headset Window as the user's monitor
+        // output. VRChat's own companion window is the intended desktop view.
+        // Keep a conventional per-eye render target here so application
+        // projection stays HMD-like and is not warped to the monitor aspect.
+        *width = config_.renderWidth;
+        *height = config_.renderHeight;
     }
 
     void GetEyeOutputViewport(vr::EVREye eye, std::uint32_t* x, std::uint32_t* y,
                               std::uint32_t* width, std::uint32_t* height) override {
+        // Standard debug-HMD side-by-side output. This viewport exists only
+        // to satisfy the SteamVR compositor; users should view VRChat's own
+        // desktop companion window instead of SteamVR's Headset Window.
         *y = 0;
         *height = config_.windowHeight;
-
-        if (config_.desktopMono) {
-            // DeskXR is intentionally viewed on a normal monitor. Mapping
-            // both eyes to the same desktop viewport leaves a full-size
-            // monocular compositor view instead of a squeezed side-by-side
-            // HMD image. Disable desktop_mono for conventional stereo SBS.
-            *x = 0;
-            *width = config_.windowWidth;
-            return;
-        }
-
-        *width = config_.windowWidth / 2;
-        *x = eye == vr::Eye_Left ? 0 : config_.windowWidth / 2;
+        *width = std::max<std::uint32_t>(1, config_.windowWidth / 2);
+        *x = eye == vr::Eye_Left ? 0 : *width;
     }
 
     void GetProjectionRaw(vr::EVREye, float* left, float* right, float* top, float* bottom) override {
-        // OpenVR projection values are tangents of the half-FOV angles.
-        // Keep the vertical half-FOV at the old PoC value (tan=1 => 90 deg
-        // vertical FOV), but scale the horizontal tangent by the actual
-        // viewport aspect ratio. This prevents non-square desktop viewports
-        // from geometrically stretching the rendered world.
-        const float viewportWidth = static_cast<float>(
-            config_.desktopMono
-                ? config_.windowWidth
-                : std::max<std::uint32_t>(1, config_.windowWidth / 2));
-        const float viewportHeight =
-            static_cast<float>(std::max<std::uint32_t>(1, config_.windowHeight));
-        const float aspect = viewportWidth / viewportHeight;
-
-        constexpr float verticalTan = 1.0f;
-        const float horizontalTan = verticalTan * aspect;
-
-        *left = -horizontalTan;
-        *right = horizontalTan;
-        *top = -verticalTan;
-        *bottom = verticalTan;
+        // Conventional symmetric 90-degree per-eye debug projection.
+        // Do not force the VR projection to the desktop monitor aspect ratio;
+        // VRChat's companion window is responsible for presenting the view.
+        *left = -1.0f;
+        *right = 1.0f;
+        *top = -1.0f;
+        *bottom = 1.0f;
     }
 
     vr::DistortionCoordinates_t ComputeDistortion(vr::EVREye, float u, float v) override {
@@ -546,20 +523,9 @@ public:
         desktopMono_ = config.desktopMono;
         display_ = std::make_unique<VirtualDisplay>(config);
 
-        const auto eyeWidth = config.desktopMono
-            ? config.windowWidth
-            : std::max<std::uint32_t>(1, config.windowWidth / 2);
-        const float eyeAspect =
-            static_cast<float>(eyeWidth) /
-            static_cast<float>(std::max<std::uint32_t>(1, config.windowHeight));
-
-        Log("[DeskXR] desktop display %ux%u mode=%s eye=%ux%u aspect=%.3f",
+        Log("[DeskXR] compositor debug display %ux%u; intended desktop view is the VRChat companion window",
             config.windowWidth,
-            config.windowHeight,
-            config.desktopMono ? "mono-overlap" : "stereo-sbs",
-            eyeWidth,
-            config.windowHeight,
-            eyeAspect);
+            config.windowHeight);
 
         position_[0] = ReadFloat(kDriverSection, "hmd_x", 0.0f);
         position_[1] = ReadFloat(kDriverSection, "hmd_y", 1.65f);
@@ -586,11 +552,10 @@ public:
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ModelNumber_String, "DeskXR Virtual HMD");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ManufacturerName_String, "DeskXR");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_SerialNumber_String, kHmdSerial);
-        // A true desktop-mono camera should not have a stereo eye offset.
         vr::VRProperties()->SetFloatProperty(
             container,
             vr::Prop_UserIpdMeters_Float,
-            desktopMono_ ? 0.0f : 0.064f);
+            0.064f);
         vr::VRProperties()->SetFloatProperty(container, vr::Prop_DisplayFrequency_Float, 90.0f);
         vr::VRProperties()->SetFloatProperty(container, vr::Prop_SecondsFromVsyncToPhotons_Float, 0.011f);
         vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.0f);
@@ -702,7 +667,7 @@ private:
     float mouseSensitivityRadPerPixel_ = 0.0013962634f;
     float mousePitchLimitRad_ = 1.3962634f;
     bool mouseLookActive_ = false;
-    bool desktopMono_ = true;
+    bool desktopMono_ = false; // retained for settings compatibility; no longer used for companion output
     vr::TrackedDeviceIndex_t index_ = vr::k_unTrackedDeviceIndexInvalid;
 };
 
