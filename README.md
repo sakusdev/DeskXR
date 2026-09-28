@@ -10,7 +10,7 @@ The repository now contains both halves of the first working pipeline:
 
 - **Windows / SteamVR driver**
   - virtual HMD with fixed position and optional mouse-driven yaw/pitch;
-  - monitor-oriented compositor output with a full-size monocular desktop mode or stereo side-by-side mode;
+  - standard SteamVR debug-HMD output; the intended monitor view is VRChat's own desktop companion window;
   - left/right virtual controllers;
   - UDP input for 6DoF pose and controller actions;
   - trigger, grip, thumbstick, A/B/X/Y, menu;
@@ -85,9 +85,11 @@ The installer searches Steam libraries for SteamVR, registers the driver with `v
 
 ## Desktop output
 
-`deskxr_display.desktop_mono` defaults to `true`. In that mode both VR eyes are mapped onto the same full desktop viewport so the monitor gets a normal full-size monocular view instead of a horizontally squeezed stereo image. Set it to `false` for conventional side-by-side output.
+DeskXR is intended to use **VRChat's own desktop companion window** as the visible monitor output.
 
-The launcher can edit this option and the desktop output resolution. These settings are read when SteamVR loads the driver, so restart SteamVR after changing them.
+Do not use SteamVR's **Headset Window / VR View** as the primary DeskXR display. That path adds SteamVR's mirror/compositor presentation behavior and is only useful for debugging.
+
+The virtual HMD still exposes a conventional stereo debug display to SteamVR so the compositor can run normally, but DeskXR no longer warps that HMD render target to the monitor aspect ratio. VRChat remains in VR mode and its own game window is the view you should keep on the monitor.
 
 ## Desktop head look
 
@@ -141,7 +143,7 @@ The Windows driver artifact now includes `DeskXR.ps1`, a small launcher/config t
 - show likely LAN IPv4 addresses for the Quest app;
 - start the Quest bridge directly over ADB with the selected PC LAN address;
 - restore Quest proximity behavior after testing;
-- choose full-size monocular desktop output or stereo side-by-side;
+- configure the virtual HMD/debug compositor settings;
 - set virtual HMD height and mouse-look sensitivity;
 - copy the primary monitor resolution into DeskXR display settings;
 - start SteamVR.
