@@ -188,14 +188,14 @@ $status.Size = New-Object System.Drawing.Size(580, 42)
 $form.Controls.Add($status)
 
 $settingsTitle = New-Object System.Windows.Forms.Label
-$settingsTitle.Text = "Desktop VR settings"
+$settingsTitle.Text = "VR / companion-window settings"
 $settingsTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 13)
 $settingsTitle.Location = New-Object System.Drawing.Point(28, 218)
 $settingsTitle.Size = New-Object System.Drawing.Size(250, 28)
 $form.Controls.Add($settingsTitle)
 
 $monoCheck = New-Object System.Windows.Forms.CheckBox
-$monoCheck.Text = "Full-size monocular desktop output"
+$monoCheck.Text = "Legacy SteamVR mono output (not recommended)"
 $monoCheck.Location = New-Object System.Drawing.Point(28, 250)
 $monoCheck.Size = New-Object System.Drawing.Size(300, 28)
 $monoCheck.ForeColor = [System.Drawing.Color]::White
@@ -286,7 +286,7 @@ $calibrationInfo.Size = New-Object System.Drawing.Size(580, 28)
 $form.Controls.Add($calibrationInfo)
 
 $note = New-Object System.Windows.Forms.Label
-$note.Text = "Unworn mode uses Meta's documented ADB proximity override. Restore the sensor after testing."
+$note.Text = "Use VRChat's own desktop window as the main monitor view. SteamVR Headset Window is only for debugging."
 $note.ForeColor = [System.Drawing.Color]::Gray
 $note.Location = New-Object System.Drawing.Point(28, 666)
 $note.Size = New-Object System.Drawing.Size(580, 44)
