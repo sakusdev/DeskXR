@@ -4,21 +4,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "adb-common.ps1")
+$adb = Resolve-DeskXRAdb
+
 function Invoke-Adb {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
 
-    $adb = Get-Command adb -ErrorAction SilentlyContinue
-    if (-not $adb) {
-        throw "adb was not found in PATH. Install Android platform-tools first."
-    }
-
-    & $adb.Source @Arguments
+    & $adb @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "adb failed with exit code $LASTEXITCODE"
     }
 }
 
-$devices = & adb devices
+$devices = & $adb devices
 if ($LASTEXITCODE -ne 0) {
     throw "adb devices failed."
 }
