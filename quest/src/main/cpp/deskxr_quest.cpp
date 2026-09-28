@@ -662,7 +662,9 @@ private:
 
         const XrSpaceLocationFlags needed =
                 XR_SPACE_LOCATION_POSITION_VALID_BIT |
-                XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+                XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
+                XR_SPACE_LOCATION_POSITION_TRACKED_BIT |
+                XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 
         for (std::size_t hand = 0; hand < locations.size(); ++hand) {
             const XrResult result =
@@ -731,11 +733,16 @@ private:
 
         const XrSpaceLocationFlags needed =
                 XR_SPACE_LOCATION_POSITION_VALID_BIT |
-                XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+                XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
+                XR_SPACE_LOCATION_POSITION_TRACKED_BIT |
+                XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
 
         const bool poseValid =
                 XR_SUCCEEDED(locateResult) &&
                 (location.locationFlags & needed) == needed;
+
+        latestLocationFlags_[index] = location.locationFlags;
+        latestPoseTracked_[index] = poseValid;
 
         if (poseValid) {
             const float cosYaw = std::cos(transformYawRad_);
@@ -745,12 +752,17 @@ private:
             const float sourceY = location.pose.position.y;
             const float sourceZ = location.pose.position.z;
 
+            latestRawPosition_[index] = {sourceX, sourceY, sourceZ};
+
             out.position[0] =
                     transformOffset_[0] + cosYaw * sourceX + sinYaw * sourceZ;
             out.position[1] =
                     transformOffset_[1] + sourceY;
             out.position[2] =
                     transformOffset_[2] - sinYaw * sourceX + cosYaw * sourceZ;
+
+            latestMappedPosition_[index] = {
+                    out.position[0], out.position[1], out.position[2]};
 
             const float qx = location.pose.orientation.x;
             const float qy = location.pose.orientation.y;
@@ -770,6 +782,8 @@ private:
             out.orientation[3] = yawW * qw - yawY * qy;
             out.flags = protocol::kPoseValid;
         } else {
+            latestRawPosition_[index] = {};
+            latestMappedPosition_[index] = {};
             out.orientation[3] = 1.0f;
             out.flags = 0;
         }
@@ -1047,6 +1061,30 @@ private:
                         " | RTT " + rttText +
                         " | calib " + calibrationText +
                         " | haptics " + std::to_string(hapticCount_.load()));
+
+                char poseLine[512] = {};
+                std::snprintf(
+                        poseLine,
+                        sizeof(poseLine),
+                        "[DeskXR pose] L tracked=%d flags=0x%llx raw=(%.3f %.3f %.3f) mapped=(%.3f %.3f %.3f) | "
+                        "R tracked=%d flags=0x%llx raw=(%.3f %.3f %.3f) mapped=(%.3f %.3f %.3f)",
+                        latestPoseTracked_[0] ? 1 : 0,
+                        static_cast<unsigned long long>(latestLocationFlags_[0]),
+                        latestRawPosition_[0][0],
+                        latestRawPosition_[0][1],
+                        latestRawPosition_[0][2],
+                        latestMappedPosition_[0][0],
+                        latestMappedPosition_[0][1],
+                        latestMappedPosition_[0][2],
+                        latestPoseTracked_[1] ? 1 : 0,
+                        static_cast<unsigned long long>(latestLocationFlags_[1]),
+                        latestRawPosition_[1][0],
+                        latestRawPosition_[1][1],
+                        latestRawPosition_[1][2],
+                        latestMappedPosition_[1][0],
+                        latestMappedPosition_[1][1],
+                        latestMappedPosition_[1][2]);
+                LogI(poseLine);
             }
         }
 
@@ -1156,6 +1194,10 @@ private:
     XrSpace localSpace_ = XR_NULL_HANDLE;
     std::array<XrPath, 2> handPaths_{XR_NULL_PATH, XR_NULL_PATH};
     std::array<XrSpace, 2> handSpaces_{XR_NULL_HANDLE, XR_NULL_HANDLE};
+    std::array<XrSpaceLocationFlags, 2> latestLocationFlags_{};
+    std::array<bool, 2> latestPoseTracked_{false, false};
+    std::array<std::array<float, 3>, 2> latestRawPosition_{};
+    std::array<std::array<float, 3>, 2> latestMappedPosition_{};
 
     XrActionSet actionSet_ = XR_NULL_HANDLE;
     XrAction poseAction_ = XR_NULL_HANDLE;
