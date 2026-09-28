@@ -98,6 +98,12 @@ Mono mode uses IPD 0 and identical left/right eye viewports. The projection frus
 
 The virtual HMD still exposes a conventional stereo debug display to SteamVR so the compositor can run normally. VRChat remains in VR mode and its own game window is the view you should keep on the monitor.
 
+## Virtual HMD power / standby
+
+DeskXR exposes an always-active OpenVR `/proximity` input and marks the virtual HMD as not power-off capable. This is intentional: the DeskXR HMD is normally stationary, so SteamVR cannot rely on head movement to decide whether it is being worn. Without the virtual proximity signal SteamVR may classify the HMD as idle and put the compositor into standby after the configured power-management timeout.
+
+The proximity signal is refreshed every driver frame and is reasserted if SteamVR calls `EnterStandby()`.
+
 ## Desktop head look
 
 DeskXR keeps the virtual HMD position fixed, but its orientation can now be controlled from the desktop:
