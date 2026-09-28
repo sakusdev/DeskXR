@@ -70,6 +70,17 @@ jobs:
             }
           }
 
+          # Verify that a portable platform-tools\adb.exe next to the
+          # packaged DeskXR scripts wins even when PATH is irrelevant.
+          $portableAdb = "build/deskxr/platform-tools/adb.exe"
+          New-Item -ItemType File -Path $portableAdb -Force | Out-Null
+          . (Resolve-Path $adbCommon)
+          $resolvedAdb = Resolve-DeskXRAdb
+          if ((Resolve-Path $resolvedAdb).Path -ne (Resolve-Path $portableAdb).Path) {
+            throw "Portable ADB resolver did not select $portableAdb"
+          }
+          Remove-Item $portableAdb -Force
+
       - name: Upload driver
         uses: actions/upload-artifact@v4
         with:
