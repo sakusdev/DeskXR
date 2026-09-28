@@ -194,7 +194,7 @@ $status.Size = New-Object System.Drawing.Size(580, 42)
 $form.Controls.Add($status)
 
 $settingsTitle = New-Object System.Windows.Forms.Label
-$settingsTitle.Text = "VR performance / companion-window settings"
+$settingsTitle.Text = "Mono VR performance / companion-window settings"
 $settingsTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 13)
 $settingsTitle.Location = New-Object System.Drawing.Point(28, 218)
 $settingsTitle.Size = New-Object System.Drawing.Size(250, 28)
@@ -301,7 +301,7 @@ $calibrationInfo.Size = New-Object System.Drawing.Size(580, 28)
 $form.Controls.Add($calibrationInfo)
 
 $note = New-Object System.Windows.Forms.Label
-$note.Text = "VRChat's desktop window adds GPU work on top of stereo VR. Use Performance/Balanced if GPU load is high."
+$note.Text = "DeskXR now defaults to mono (IPD 0 + identical eye viewports). Use VRChat's own desktop window; Headset Window is debug-only."
 $note.ForeColor = [System.Drawing.Color]::Gray
 $note.Location = New-Object System.Drawing.Point(28, 666)
 $note.Size = New-Object System.Drawing.Size(580, 44)
@@ -373,7 +373,7 @@ $saveSettings.Add_Click({
             }
         }
 
-        Save-DeskSettings -Path $settingsPath -DesktopMono $false -HmdHeight $hmdHeight -MouseSensitivity $mouseSensitivity -WindowWidth $windowWidth -WindowHeight $windowHeight -RenderWidth $renderWidth -RenderHeight $renderHeight -DisplayFrequency $displayFrequency
+        Save-DeskSettings -Path $settingsPath -DesktopMono $true -HmdHeight $hmdHeight -MouseSensitivity $mouseSensitivity -WindowWidth $windowWidth -WindowHeight $windowHeight -RenderWidth $renderWidth -RenderHeight $renderHeight -DisplayFrequency $displayFrequency
         $status.Text = ("Saved: {0}x{1}/eye @ {2} Hz. Restart SteamVR." -f $renderWidth, $renderHeight, $displayFrequency)
     } catch {
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "DeskXR") | Out-Null
