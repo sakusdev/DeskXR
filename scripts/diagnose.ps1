@@ -8,26 +8,28 @@ Write-Host "=== DeskXR diagnostics ==="
 Write-Host ""
 
 Write-Host "[ADB]"
-$adb = Get-Command adb -ErrorAction SilentlyContinue
+. (Join-Path $PSScriptRoot "adb-common.ps1")
+$adb = Resolve-DeskXRAdb -AllowMissing
 if (-not $adb) {
     Write-Host "adb: NOT FOUND"
+    Write-Host ("Portable location: {0}" -f (Join-Path $PSScriptRoot "platform-tools\adb.exe"))
 } else {
-    Write-Host ("adb: {0}" -f $adb.Source)
-    & $adb.Source devices
+    Write-Host ("adb: {0}" -f $adb)
+    & $adb devices
     Write-Host ""
 
     Write-Host "Quest package:"
-    & $adb.Source shell pm path org.sakus.deskxr 2>$null
+    & $adb shell pm path org.sakus.deskxr 2>$null
 
     Write-Host ""
     Write-Host "Quest foreground/activity hint:"
-    & $adb.Source shell dumpsys activity activities 2>$null |
+    & $adb shell dumpsys activity activities 2>$null |
         Select-String "org.sakus.deskxr|mResumedActivity" |
         Select-Object -First 12
 
     Write-Host ""
     Write-Host "Recent DeskXR Quest logs:"
-    & $adb.Source logcat -d -s "DeskXR:I" "*:S" 2>$null |
+    & $adb logcat -d -s "DeskXR:I" "*:S" 2>$null |
         Select-Object -Last 30
 }
 
