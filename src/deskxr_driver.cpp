@@ -523,9 +523,11 @@ public:
         desktopMono_ = config.desktopMono;
         display_ = std::make_unique<VirtualDisplay>(config);
 
-        Log("[DeskXR] compositor debug display %ux%u; intended desktop view is the VRChat companion window",
+        Log("[DeskXR] compositor debug display %ux%u render=%ux%u; intended desktop view is the VRChat companion window",
             config.windowWidth,
-            config.windowHeight);
+            config.windowHeight,
+            config.renderWidth,
+            config.renderHeight);
 
         position_[0] = ReadFloat(kDriverSection, "hmd_x", 0.0f);
         position_[1] = ReadFloat(kDriverSection, "hmd_y", 1.65f);
@@ -541,6 +543,11 @@ public:
         mousePitchLimitRad_ =
             std::clamp(pitchLimitDegrees, 1.0f, 89.0f) *
             3.14159265358979323846f / 180.0f;
+
+        displayFrequencyHz_ = std::clamp(
+            ReadFloat(kDriverSection, "display_frequency_hz", 72.0f),
+            30.0f,
+            144.0f);
     }
 
     const char* Serial() const { return kHmdSerial; }
@@ -556,8 +563,14 @@ public:
             container,
             vr::Prop_UserIpdMeters_Float,
             0.064f);
-        vr::VRProperties()->SetFloatProperty(container, vr::Prop_DisplayFrequency_Float, 90.0f);
-        vr::VRProperties()->SetFloatProperty(container, vr::Prop_SecondsFromVsyncToPhotons_Float, 0.011f);
+        vr::VRProperties()->SetFloatProperty(
+            container,
+            vr::Prop_DisplayFrequency_Float,
+            displayFrequencyHz_);
+        vr::VRProperties()->SetFloatProperty(
+            container,
+            vr::Prop_SecondsFromVsyncToPhotons_Float,
+            1.0f / displayFrequencyHz_);
         vr::VRProperties()->SetFloatProperty(container, vr::Prop_UserHeadToEyeDepthMeters_Float, 0.0f);
         vr::VRProperties()->SetBoolProperty(container, vr::Prop_IsOnDesktop_Bool, false);
         vr::VRProperties()->SetBoolProperty(container, vr::Prop_DisplayDebugMode_Bool, true);
@@ -666,6 +679,7 @@ private:
     float pitchRad_ = 0.0f;
     float mouseSensitivityRadPerPixel_ = 0.0013962634f;
     float mousePitchLimitRad_ = 1.3962634f;
+    float displayFrequencyHz_ = 72.0f;
     bool mouseLookActive_ = false;
     bool desktopMono_ = false; // retained for settings compatibility; no longer used for companion output
     vr::TrackedDeviceIndex_t index_ = vr::k_unTrackedDeviceIndexInvalid;
