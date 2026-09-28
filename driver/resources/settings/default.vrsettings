@@ -1,0 +1,20 @@
+{
+  "driver_deskxr": {
+    "enable": true,
+    "udp_port": 39742,
+    "hmd_x": 0.0,
+    "hmd_y": 1.65,
+    "hmd_z": 0.0,
+    "mouse_sensitivity_deg_per_pixel": 0.08,
+    "mouse_pitch_limit_deg": 80.0
+  },
+  "deskxr_display": {
+    "window_x": 0,
+    "window_y": 0,
+    "window_width": 1920,
+    "window_height": 1080,
+    "render_width": 1600,
+    "render_height": 1600,
+    "desktop_mono": true
+  }
+}

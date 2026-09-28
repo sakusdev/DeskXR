@@ -1,0 +1,58 @@
+name: Build Quest client
+
+on:
+  push:
+    branches:
+      - main
+      - "work/**"
+    paths:
+      - "build.gradle"
+      - "settings.gradle"
+      - "quest/**"
+      - "common/**"
+      - ".github/workflows/build-quest.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deskxr-quest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android native toolchain
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build debug APK
+        run: gradle :quest:assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: test -f quest/build/outputs/apk/debug/quest-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskXR-Quest-debug
+          path: quest/build/outputs/apk/debug/quest-debug.apk
+          if-no-files-found: error

@@ -1,0 +1,74 @@
+name: Build Windows driver
+
+on:
+  push:
+    branches:
+      - main
+      - "work/**"
+    paths:
+      - "CMakeLists.txt"
+      - "src/**"
+      - "common/**"
+      - "driver/**"
+      - "scripts/**"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deskxr-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Verify package
+        shell: pwsh
+        run: |
+          $dll = "build/deskxr/bin/win64/driver_deskxr.dll"
+          $manifest = "build/deskxr/driver.vrdrivermanifest"
+          $installer = "build/deskxr/install.ps1"
+          $launcher = "build/deskxr/DeskXR.ps1"
+          $unworn = "build/deskxr/quest-unworn-mode.ps1"
+          $questStart = "build/deskxr/quest-start.ps1"
+          $questInstall = "build/deskxr/quest-install.ps1"
+          $questStop = "build/deskxr/quest-stop.ps1"
+          if (-not (Test-Path $dll)) { throw "Missing $dll" }
+          if (-not (Test-Path $manifest)) { throw "Missing $manifest" }
+          if (-not (Test-Path $installer)) { throw "Missing $installer" }
+          if (-not (Test-Path $launcher)) { throw "Missing $launcher" }
+          if (-not (Test-Path $unworn)) { throw "Missing $unworn" }
+          if (-not (Test-Path $questStart)) { throw "Missing $questStart" }
+          if (-not (Test-Path $questInstall)) { throw "Missing $questInstall" }
+          if (-not (Test-Path $questStop)) { throw "Missing $questStop" }
+
+          foreach ($script in @($installer, $launcher, $unworn, $questStart, $questInstall, $questStop)) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell syntax check failed: $script"
+            }
+          }
+
+      - name: Upload driver
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskXR-Windows-x64
+          path: build/deskxr
+          if-no-files-found: error

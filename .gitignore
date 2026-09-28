@@ -1,0 +1,9 @@
+build/
+out/
+.vs/
+.idea/
+*.user
+*.suo
+*.VC.db
+__pycache__/
+*.pyc

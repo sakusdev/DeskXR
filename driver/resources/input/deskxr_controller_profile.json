@@ -1,0 +1,18 @@
+{
+  "jsonid": "input_profile",
+  "controller_type": "oculus_touch",
+  "input_bindingui_mode": "controller_handed",
+  "input_source": {
+    "/input/trigger": { "type": "trigger", "order": 1 },
+    "/input/grip": { "type": "trigger", "order": 2 },
+    "/input/joystick": { "type": "joystick", "order": 3 },
+    "/input/thumbrest": { "type": "button", "touch": true, "order": 4 },
+    "/input/a": { "type": "button", "touch": true, "order": 5 },
+    "/input/b": { "type": "button", "touch": true, "order": 6 },
+    "/input/x": { "type": "button", "touch": true, "order": 7 },
+    "/input/y": { "type": "button", "touch": true, "order": 8 },
+    "/input/menu": { "type": "button", "order": 9 },
+    "/output/haptic": { "type": "vibration", "order": 10 }
+  },
+  "default_bindings": []
+}
