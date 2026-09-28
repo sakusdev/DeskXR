@@ -87,9 +87,17 @@ The installer searches Steam libraries for SteamVR, registers the driver with `v
 
 DeskXR is intended to use **VRChat's own desktop companion window** as the visible monitor output.
 
-Do not use SteamVR's **Headset Window / VR View** as the primary DeskXR display. That path adds SteamVR's mirror/compositor presentation behavior and is only useful for debugging.
+Do not use SteamVR's **Headset Window / VR View** as the primary DeskXR display. That path is useful for debugging, but it adds the SteamVR mirror/compositor presentation path.
 
-The virtual HMD still exposes a conventional stereo debug display to SteamVR so the compositor can run normally, but DeskXR no longer warps that HMD render target to the monitor aspect ratio. VRChat remains in VR mode and its own game window is the view you should keep on the monitor.
+There is an important performance tradeoff: VRChat still renders the normal stereo VR views for SteamVR, while its desktop companion window can add additional GPU work. DeskXR therefore defaults to a lower virtual-HMD workload and exposes three launcher presets:
+
+- **Performance** — 960x960 per eye @ 60 Hz;
+- **Balanced** — 1200x1200 per eye @ 72 Hz (default);
+- **Quality** — 1600x1600 per eye @ 90 Hz.
+
+These settings affect the virtual HMD render target and reported refresh rate, not the size of the VRChat desktop window. Restart SteamVR after changing the preset.
+
+The virtual HMD still exposes a conventional stereo debug display to SteamVR so the compositor can run normally. VRChat remains in VR mode and its own game window is the view you should keep on the monitor.
 
 ## Desktop head look
 
@@ -219,7 +227,7 @@ The PC driver considers controller data stale after one second and reports track
 - validate and tune the new guided two-controller calibration on real hardware;
 - validate haptics on real Quest Touch hardware;
 - validate mouse-look behavior inside VRChat;
-- validate the new mono desktop compositor mode on SteamVR/VRChat;
+- measure VRChat companion-window GPU cost and tune the default render preset on real hardware;
 - OSC FBT setup helper.
 
 See `docs/architecture.md` for more detail.
