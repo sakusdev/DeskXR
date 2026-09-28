@@ -717,6 +717,26 @@ public:
         vr::VRProperties()->SetStringProperty(container, vr::Prop_SerialNumber_String, Serial());
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ControllerType_String, "oculus_touch");
         vr::VRProperties()->SetInt32Property(container, vr::Prop_ControllerRoleHint_Int32, role_);
+
+        // SteamVR does not infer a good visual render model from
+        // Prop_ControllerType_String alone. Without this property it falls
+        // back to the ugly grey generic controller model seen in vrmonitor.
+        //
+        // SteamVR currently ships built-in Quest 2 Touch render models for
+        // the oculus_touch emulation profile. Touch Plus has a different
+        // physical shell, but these are a much closer temporary visual
+        // representation than the generic fallback and require no bundled
+        // copyrighted model assets.
+        vr::VRProperties()->SetStringProperty(
+            container,
+            vr::Prop_RenderModelName_String,
+            role_ == vr::TrackedControllerRole_LeftHand
+                ? "oculus_quest2_controller_left"
+                : "oculus_quest2_controller_right");
+        vr::VRProperties()->SetStringProperty(
+            container,
+            vr::Prop_TrackingSystemName_String,
+            "oculus");
         vr::VRProperties()->SetStringProperty(
             container, vr::Prop_InputProfilePath_String,
             "{deskxr}/input/deskxr_controller_profile.json");
