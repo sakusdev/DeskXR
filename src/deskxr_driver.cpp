@@ -27,6 +27,7 @@ constexpr const char* kHmdSerial = "DESKXR-HMD-001";
 constexpr const char* kLeftSerial = "DESKXR-L-001";
 constexpr const char* kRightSerial = "DESKXR-R-001";
 constexpr std::uint16_t kDefaultPort = 39742;
+constexpr std::uint64_t kDeskXrUniverseId = 0x44585201ULL; // stable, nonzero, not Oculus-reserved ID 1
 
 void Log(const char* fmt, ...) {
     if (vr::VRDriverLog() == nullptr) return;
@@ -593,6 +594,18 @@ public:
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ModelNumber_String, "DeskXR Virtual HMD");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_ManufacturerName_String, "DeskXR");
         vr::VRProperties()->SetStringProperty(container, vr::Prop_SerialNumber_String, kHmdSerial);
+        vr::VRProperties()->SetStringProperty(
+            container,
+            vr::Prop_TrackingSystemName_String,
+            "deskxr");
+        vr::VRProperties()->SetStringProperty(
+            container,
+            vr::Prop_ActualTrackingSystemName_String,
+            "deskxr");
+        vr::VRProperties()->SetUint64Property(
+            container,
+            vr::Prop_CurrentUniverseId_Uint64,
+            kDeskXrUniverseId);
         // Mono mode collapses both virtual eyes to the same camera pose.
         // OpenVR applications still submit Eye_Left/Eye_Right, but there is
         // no stereo parallax when DeskXR mono mode is enabled.
@@ -639,7 +652,8 @@ public:
         }
 
         PushPose();
-        Log("[DeskXR] virtual HMD activated (always-worn proximity enabled)");
+        Log("[DeskXR] virtual HMD activated (always-worn proximity enabled, universe=%llu)",
+            static_cast<unsigned long long>(kDeskXrUniverseId));
         return vr::VRInitError_None;
     }
 
@@ -844,10 +858,18 @@ public:
             role_ == vr::TrackedControllerRole_LeftHand
                 ? "oculus_quest2_controller_left"
                 : "oculus_quest2_controller_right");
+        // Keep the controller type as oculus_touch so OVR Advanced Settings
+        // and SteamVR can reuse Touch bindings, but report the actual tracking
+        // system as DeskXR. This avoids third-party tools mistaking the whole
+        // device stack for the native Oculus runtime.
         vr::VRProperties()->SetStringProperty(
             container,
             vr::Prop_TrackingSystemName_String,
-            "oculus");
+            "deskxr");
+        vr::VRProperties()->SetStringProperty(
+            container,
+            vr::Prop_ActualTrackingSystemName_String,
+            "deskxr");
         vr::VRProperties()->SetStringProperty(
             container, vr::Prop_InputProfilePath_String,
             "{deskxr}/input/deskxr_controller_profile.json");
