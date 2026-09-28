@@ -201,20 +201,35 @@ $settingsTitle.Size = New-Object System.Drawing.Size(250, 28)
 $form.Controls.Add($settingsTitle)
 
 $performanceLabel = New-Object System.Windows.Forms.Label
-$performanceLabel.Text = "Virtual HMD render preset"
+$performanceLabel.Text = "Render preset"
 $performanceLabel.Location = New-Object System.Drawing.Point(28, 250)
-$performanceLabel.Size = New-Object System.Drawing.Size(210, 24)
+$performanceLabel.Size = New-Object System.Drawing.Size(125, 24)
 $form.Controls.Add($performanceLabel)
 
 $performanceBox = New-Object System.Windows.Forms.ComboBox
-$performanceBox.Location = New-Object System.Drawing.Point(240, 247)
-$performanceBox.Size = New-Object System.Drawing.Size(330, 30)
+$performanceBox.Location = New-Object System.Drawing.Point(150, 247)
+$performanceBox.Size = New-Object System.Drawing.Size(235, 30)
 $performanceBox.DropDownStyle = "DropDownList"
-[void]$performanceBox.Items.Add("Performance — 960x960/eye @ 60 Hz")
-[void]$performanceBox.Items.Add("Balanced — 1200x1200/eye @ 72 Hz")
-[void]$performanceBox.Items.Add("Quality — 1600x1600/eye @ 90 Hz")
+[void]$performanceBox.Items.Add("Performance @ 60 Hz")
+[void]$performanceBox.Items.Add("Balanced @ 72 Hz")
+[void]$performanceBox.Items.Add("Quality @ 90 Hz")
 $performanceBox.SelectedIndex = 1
 $form.Controls.Add($performanceBox)
+
+$aspectLabel = New-Object System.Windows.Forms.Label
+$aspectLabel.Text = "Aspect"
+$aspectLabel.Location = New-Object System.Drawing.Point(402, 250)
+$aspectLabel.Size = New-Object System.Drawing.Size(62, 24)
+$form.Controls.Add($aspectLabel)
+
+$aspectBox = New-Object System.Windows.Forms.ComboBox
+$aspectBox.Location = New-Object System.Drawing.Point(466, 247)
+$aspectBox.Size = New-Object System.Drawing.Size(104, 30)
+$aspectBox.DropDownStyle = "DropDownList"
+[void]$aspectBox.Items.Add("16:9")
+[void]$aspectBox.Items.Add("16:10")
+$aspectBox.SelectedIndex = 0
+$form.Controls.Add($aspectBox)
 
 $heightLabel = New-Object System.Windows.Forms.Label
 $heightLabel.Text = "Virtual HMD height (m)"
@@ -301,7 +316,7 @@ $calibrationInfo.Size = New-Object System.Drawing.Size(580, 28)
 $form.Controls.Add($calibrationInfo)
 
 $note = New-Object System.Windows.Forms.Label
-$note.Text = "DeskXR now defaults to mono (IPD 0 + identical eye viewports). Use VRChat's own desktop window; Headset Window is debug-only."
+$note.Text = "Mono output supports native 16:9 and 16:10 render targets. Projection FOV follows the selected aspect to avoid stretching."
 $note.ForeColor = [System.Drawing.Color]::Gray
 $note.Location = New-Object System.Drawing.Point(28, 666)
 $note.Size = New-Object System.Drawing.Size(580, 44)
@@ -320,6 +335,7 @@ if ($current) {
     $heightPixelsBox.Text = [string]$current.deskxr_display.window_height
 
     $renderWidth = [int]$current.deskxr_display.render_width
+    $renderHeight = [int]$current.deskxr_display.render_height
     $frequency = [double]$current.driver_deskxr.display_frequency_hz
 
     if ($renderWidth -le 1000 -or $frequency -le 60.5) {
@@ -329,8 +345,16 @@ if ($current) {
     } else {
         $performanceBox.SelectedIndex = 1
     }
+
+    if ($renderHeight -gt 0) {
+        $ratio = [double]$renderWidth / [double]$renderHeight
+        $distance169 = [Math]::Abs($ratio - (16.0 / 9.0))
+        $distance1610 = [Math]::Abs($ratio - (16.0 / 10.0))
+        $aspectBox.SelectedIndex = if ($distance1610 -lt $distance169) { 1 } else { 0 }
+    }
 } else {
     $performanceBox.SelectedIndex = 1
+    $aspectBox.SelectedIndex = 0
     $heightBox.Text = "1.65"
     $sensitivityBox.Text = "0.08"
     $widthBox.Text = "1920"
@@ -358,23 +382,36 @@ $saveSettings.Add_Click({
         switch ($performanceBox.SelectedIndex) {
             0 {
                 $renderWidth = 960
-                $renderHeight = 960
                 $displayFrequency = 60.0
             }
             2 {
                 $renderWidth = 1600
-                $renderHeight = 1600
                 $displayFrequency = 90.0
             }
             default {
-                $renderWidth = 1200
-                $renderHeight = 1200
+                $renderWidth = 1280
                 $displayFrequency = 72.0
             }
         }
 
+        if ($aspectBox.SelectedIndex -eq 1) {
+            # 16:10
+            switch ($renderWidth) {
+                960  { $renderHeight = 600 }
+                1600 { $renderHeight = 1000 }
+                default { $renderHeight = 800 }
+            }
+        } else {
+            # 16:9
+            switch ($renderWidth) {
+                960  { $renderHeight = 540 }
+                1600 { $renderHeight = 900 }
+                default { $renderHeight = 720 }
+            }
+        }
+
         Save-DeskSettings -Path $settingsPath -DesktopMono $true -HmdHeight $hmdHeight -MouseSensitivity $mouseSensitivity -WindowWidth $windowWidth -WindowHeight $windowHeight -RenderWidth $renderWidth -RenderHeight $renderHeight -DisplayFrequency $displayFrequency
-        $status.Text = ("Saved: {0}x{1}/eye @ {2} Hz. Restart SteamVR." -f $renderWidth, $renderHeight, $displayFrequency)
+        $status.Text = ("Saved mono: {0}x{1} @ {2} Hz. Restart SteamVR." -f $renderWidth, $renderHeight, $displayFrequency)
     } catch {
         [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, "DeskXR") | Out-Null
     }
@@ -384,7 +421,15 @@ $useDisplay.Add_Click({
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
     $widthBox.Text = [string]$bounds.Width
     $heightPixelsBox.Text = [string]$bounds.Height
-    $status.Text = "Primary monitor size copied. Press Save desktop settings."
+
+    if ($bounds.Height -gt 0) {
+        $ratio = [double]$bounds.Width / [double]$bounds.Height
+        $distance169 = [Math]::Abs($ratio - (16.0 / 9.0))
+        $distance1610 = [Math]::Abs($ratio - (16.0 / 10.0))
+        $aspectBox.SelectedIndex = if ($distance1610 -lt $distance169) { 1 } else { 0 }
+    }
+
+    $status.Text = "Primary monitor size/aspect copied. Press Save VR settings."
 })
 
 $install.Add_Click({
