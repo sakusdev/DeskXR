@@ -19,6 +19,26 @@
             android:name="com.oculus.supportedDevices"
             android:value="quest3|quest3s" />
 
+        <!--
+          Normal 2D launcher activity. Keeping configuration outside the
+          immersive activity avoids the Horizon/OVR "starting session" screen
+          before the user has had a chance to enter the PC address.
+        -->
+        <activity
+            android:name=".SetupActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Dedicated immersive OpenXR activity. It is normally launched by
+          SetupActivity or directly by the PC ADB helper with autostart extras.
+        -->
         <activity
             android:name=".MainActivity"
             android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
@@ -30,7 +50,6 @@
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="com.oculus.intent.category.VR" />
                 <category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" />
             </intent-filter>
