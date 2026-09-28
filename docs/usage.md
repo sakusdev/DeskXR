@@ -54,10 +54,18 @@ The driver should expose one virtual HMD and two virtual controllers.
 
 Keep the Quest connected through authorized ADB for the first test.
 
-Verify:
+You do **not** need to add ADB to the Windows environment `PATH`. For a portable setup, extract Android platform-tools so this path exists next to the DeskXR scripts:
+
+~~~text
+DeskXR-Windows-x64\platform-tools\adb.exe
+~~~
+
+All packaged Quest helpers and `diagnose.ps1` automatically find that local copy. They also fall back to the Android SDK environment variables/default SDK location and then `PATH`.
+
+If you are testing ADB manually from PowerShell without a global PATH entry, use:
 
 ~~~powershell
-adb devices
+.\platform-tools\adb.exe devices
 ~~~
 
 The Quest should appear with status `device`, not `unauthorized`.
