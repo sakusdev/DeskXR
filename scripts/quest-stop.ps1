@@ -4,12 +4,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$adb = Get-Command adb -ErrorAction SilentlyContinue
-if (-not $adb) {
-    throw "adb was not found in PATH. Install Android platform-tools first."
-}
+. (Join-Path $PSScriptRoot "adb-common.ps1")
+$adb = Resolve-DeskXRAdb
 
-$devices = & $adb.Source devices
+$devices = & $adb devices
 if ($LASTEXITCODE -ne 0) {
     throw "adb devices failed."
 }
@@ -29,14 +27,14 @@ if ($connected.Count -gt 1) {
 }
 
 Write-Host "Stopping DeskXR on Quest..."
-& $adb.Source shell am force-stop org.sakus.deskxr
+& $adb shell am force-stop org.sakus.deskxr
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to stop DeskXR on Quest."
 }
 
 if (-not $KeepUnwornOverride) {
     Write-Host "Restoring normal Quest proximity sensor behavior..."
-    & $adb.Source shell am broadcast -a com.oculus.vrpowermanager.automation_disable | Out-Null
+    & $adb shell am broadcast -a com.oculus.vrpowermanager.automation_disable | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "DeskXR stopped, but the Quest proximity override could not be restored."
     }
