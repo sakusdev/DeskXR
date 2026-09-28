@@ -5,17 +5,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$adb = Get-Command adb -ErrorAction SilentlyContinue
-if (-not $adb) {
-    throw "adb was not found in PATH. Install Android platform-tools first."
-}
+. (Join-Path $PSScriptRoot "adb-common.ps1")
+$adb = Resolve-DeskXRAdb
 
 $resolvedApk = Resolve-Path -Path $ApkPath -ErrorAction Stop
 if ([System.IO.Path]::GetExtension($resolvedApk.Path) -ne ".apk") {
     throw "The selected file is not an APK."
 }
 
-$devices = & $adb.Source devices
+$devices = & $adb devices
 if ($LASTEXITCODE -ne 0) {
     throw "adb devices failed."
 }
@@ -35,7 +33,7 @@ if ($connected.Count -gt 1) {
 }
 
 Write-Host "Installing DeskXR APK..."
-$installOutput = & $adb.Source install -r $resolvedApk.Path 2>&1
+$installOutput = & $adb install -r $resolvedApk.Path 2>&1
 
 if ($LASTEXITCODE -ne 0 -or
     ($installOutput -join [Environment]::NewLine) -match "Failure \[") {
