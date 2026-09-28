@@ -44,6 +44,7 @@ jobs:
           $questStart = "build/deskxr/quest-start.ps1"
           $questInstall = "build/deskxr/quest-install.ps1"
           $questStop = "build/deskxr/quest-stop.ps1"
+          $diagnose = "build/deskxr/diagnose.ps1"
           if (-not (Test-Path $dll)) { throw "Missing $dll" }
           if (-not (Test-Path $manifest)) { throw "Missing $manifest" }
           if (-not (Test-Path $installer)) { throw "Missing $installer" }
@@ -53,8 +54,9 @@ jobs:
           if (-not (Test-Path $questStart)) { throw "Missing $questStart" }
           if (-not (Test-Path $questInstall)) { throw "Missing $questInstall" }
           if (-not (Test-Path $questStop)) { throw "Missing $questStop" }
+          if (-not (Test-Path $diagnose)) { throw "Missing $diagnose" }
 
-          foreach ($script in @($installer, $adbCommon, $launcher, $unworn, $questStart, $questInstall, $questStop)) {
+          foreach ($script in @($installer, $adbCommon, $launcher, $unworn, $questStart, $questInstall, $questStop, $diagnose)) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
